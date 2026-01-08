@@ -1,0 +1,443 @@
+//@version=6
+// не используй тернарные операторы и не переноси на новые строки
+// Если переменная объявляется в первый раз то при помощи = а если уже существующей переменной что-то присваивается то :=
+
+indicator("JINADA Down 💸", overlay=false, max_bars_back = 5000, max_boxes_count = 500)
+
+
+// === === === === === === === === === === ===
+// === === === Блок карты осциляторов  === ===
+// === === === === === === === === === === ===
+
+// Inputs for Oscillator Map
+oscMapGroup = "Карта осциляторов"
+showOscMap = input.bool(true, title="Показать карту осциляторов", group=oscMapGroup, display=display.data_window)
+osc_bull_color = input.color(#00e475, "Цвет бычий", group=oscMapGroup, display=display.data_window)
+osc_bear_color = input.color(#ff5252, "Цвет медвежий", group=oscMapGroup, display=display.data_window)
+osc_neutral_color = input.color(color.gray, "Цвет нейтральный", group=oscMapGroup, display=display.data_window)
+osc_label_bg_color = input.color(color.black, "Цвет фона подписи", group=oscMapGroup, display=display.data_window)
+osc_label_text_color = input.color(color.white, "Цвет текста подписи", group=oscMapGroup, display=display.data_window)
+
+// Momentum
+momentum_val = ta.mom(close, 10)
+momentum_heat_color = color.new(osc_bear_color, 100)
+if momentum_val > 0
+    momentum_heat_color := color.new(osc_bull_color, 0)
+if momentum_val < 0
+    momentum_heat_color := color.new(osc_bear_color, 0)
+if math.abs(momentum_val) < 0.1
+    momentum_heat_color := color.new(osc_neutral_color, 80)
+plot(showOscMap ? -80 : na, color=momentum_heat_color, style=plot.style_area, linewidth=1, title="Тепловая карта Momentum", histbase=-84, display = display.pane)
+
+// Подпись справа от последнего квадратика, маленькая и полупрозрачная, без рамки
+var label momentum_label = na
+if showOscMap and barstate.islast
+    label.delete(momentum_label)
+    momentum_label := label.new(x=bar_index + 1,y=-82,text="Momentum (" + str.tostring(momentum_val, format.mintick) + ")",color=color.new(osc_label_bg_color, 100), textcolor=color.new(osc_label_text_color, 60), style=label.style_label_left,size=size.small)
+    label.set_textalign(momentum_label, text.align_left)
+
+
+// CCI
+cci_val = ta.cci(close, 20)
+cci_overbought = 120
+cci_oversold = -120
+cci_heat_color = color.new(osc_bear_color, 100)
+if cci_val > cci_overbought
+    cci_heat_color := color.new(osc_bear_color, 0)
+if cci_val < cci_oversold
+    cci_heat_color := color.new(osc_bull_color, 0)
+if cci_val >= -70 and cci_val <= -30
+    cci_heat_color := color.new(osc_bull_color, 80)
+if cci_val <= 70 and cci_val >= 30
+    cci_heat_color := color.new(osc_bear_color, 80)
+plot(showOscMap ? -84 : na, color=cci_heat_color, style=plot.style_area, linewidth=1, title="Тепловая карта CCI", histbase=-88, display = display.pane)
+
+var label cci_label = na
+if showOscMap and barstate.islast
+    label.delete(cci_label)
+    cci_label := label.new(x=bar_index + 1,y=-86,text="CCI (" + str.tostring(cci_val, format.percent) + ")",color=color.new(osc_label_bg_color, 100), textcolor=color.new(osc_label_text_color, 60), style=label.style_label_left,size=size.small)
+    label.set_textalign(cci_label, text.align_left)
+
+
+// Stochastic
+stoch_k = ta.stoch(close, high, low, 14)
+stoch_d = ta.sma(stoch_k, 3)
+stoch_overbought = 90
+stoch_overbought_half = 80
+stoch_oversold = 10
+stoch_oversold_half = 20
+stoch_heat_color = color.new(osc_bear_color, 100)
+if stoch_k > stoch_overbought
+    stoch_heat_color := color.new(osc_bear_color, 0)
+if stoch_k > stoch_overbought_half and stoch_k <= stoch_overbought
+    stoch_heat_color := color.new(osc_bear_color, 80)
+if stoch_k < stoch_oversold
+    stoch_heat_color := color.new(osc_bull_color, 0)
+if stoch_k < stoch_oversold_half and stoch_k >= stoch_oversold
+    stoch_heat_color := color.new(osc_bull_color, 80)
+plot(showOscMap ? -88 : na, color=stoch_heat_color, style=plot.style_area, linewidth=1, title="Тепловая карта Stoch", histbase=-92, display = display.pane)
+
+var label stoch_label = na
+if showOscMap and barstate.islast
+    label.delete(stoch_label)
+    stoch_label := label.new(x=bar_index + 1,y=-90,text="Stoch (" + str.tostring(stoch_k, format.percent) + ")",color=color.new(osc_label_bg_color, 100), textcolor=color.new(osc_label_text_color, 60), style=label.style_label_left,size=size.small)
+    label.set_textalign(stoch_label, text.align_left)
+
+
+// Stochastic RSI
+rsi = ta.rsi(close, 14)
+stochrsi_k = ta.stoch(rsi, rsi, rsi, 14)
+stochrsi_d = ta.sma(stochrsi_k, 3)
+stochrsi_overbought = 90
+stochrsi_overbought_half = 80
+stochrsi_oversold = 10
+stochrsi_oversold_half = 20
+stochrsi_heat_color = color.new(osc_bear_color, 100)
+if stochrsi_k > stochrsi_overbought
+    stochrsi_heat_color := color.new(osc_bear_color, 0)
+if stochrsi_k > stochrsi_overbought_half and stochrsi_k <= stochrsi_overbought
+    stochrsi_heat_color := color.new(osc_bear_color, 80)
+if stochrsi_k < stochrsi_oversold
+    stochrsi_heat_color := color.new(osc_bull_color, 0)
+if stochrsi_k < stochrsi_oversold_half and stochrsi_k >= stochrsi_oversold
+    stochrsi_heat_color := color.new(osc_bull_color, 80)
+plot(showOscMap ? -92 : na, color=stochrsi_heat_color, style=plot.style_area, linewidth=1, title="Тепловая карта StochRSI", histbase=-96, display = display.pane)
+
+var label stochrsi_label = na
+if showOscMap and barstate.islast
+    label.delete(stochrsi_label)
+    stochrsi_label := label.new(x=bar_index + 1,y=-94,text="StochRSI (" + str.tostring(stochrsi_k, format.percent) + ")",color=color.new(osc_label_bg_color, 100), textcolor=color.new(osc_label_text_color, 60), style=label.style_label_left,size=size.small)
+    label.set_textalign(stochrsi_label, text.align_left)
+
+
+// RSI
+rsi_overbought = 80
+rsi_overbought_half = 60
+rsi_oversold = 20
+rsi_oversold_half = 40
+rsi_heat_color = color.new(osc_bear_color, 100)
+if rsi > rsi_overbought
+    rsi_heat_color := color.new(osc_bear_color, 0)
+if rsi > rsi_overbought_half and rsi <= rsi_overbought
+    rsi_heat_color := color.new(osc_bear_color, 80)
+if rsi < rsi_oversold
+    rsi_heat_color := color.new(osc_bull_color, 0)
+if rsi < rsi_oversold_half and rsi >= rsi_oversold
+    rsi_heat_color := color.new(osc_bull_color, 80)
+plot(showOscMap ? -96 : na, color=rsi_heat_color, style=plot.style_area, linewidth=1, title="Тепловая карта RSI", histbase=-100, display = display.pane)
+
+var label rsi_label = na
+if showOscMap and barstate.islast
+    label.delete(rsi_label)
+    rsi_label := label.new(x=bar_index + 1,y=-98,text="RSI (" + str.tostring(rsi, format.percent) + ")",color=color.new(osc_label_bg_color, 100), textcolor=color.new(osc_label_text_color, 60), style=label.style_label_left,size=size.small)
+    label.set_textalign(rsi_label, text.align_left)
+
+
+// MACD
+macd_fast = 12
+macd_slow = 26
+macd_signal = 9
+[macd_val, macd_signal_val, _] = ta.macd(close, macd_fast, macd_slow, macd_signal)
+macd_hist = macd_val - macd_signal_val
+macd_heat_color = color.new(osc_bear_color, 100)
+if macd_hist > 0
+    macd_heat_color := color.new(osc_bull_color, 0)
+if macd_hist < 0
+    macd_heat_color := color.new(osc_bear_color, 0)
+if math.abs(macd_hist) < 0.1
+    macd_heat_color := color.new(osc_neutral_color, 80)
+plot(showOscMap ? -100 : na, color=macd_heat_color, style=plot.style_area, linewidth=1, title="Тепловая карта MACD", histbase=-104, display = display.pane)
+
+var label macd_label = na
+if showOscMap and barstate.islast
+    label.delete(macd_label)
+    macd_label := label.new(x=bar_index + 1,y=-102,text="MACD (" + str.tostring(macd_hist, format.percent) + ")",color=color.new(osc_label_bg_color, 100), textcolor=color.new(osc_label_text_color, 60), style=label.style_label_left,size=size.small)
+    label.set_textalign(macd_label, text.align_left)
+
+
+
+// === === === === === === === === === === === === === ===  === === ===
+// === === === Блок стохастического центрального осцилятора === === ===
+// === === === === === === === === === === === === === ===  === === ===
+
+csoGroup = "ЦСО"
+displayMode = input.string(title="Режим отображения", defval="Оба", options=["Стандарт", "Гистограмма", "Оба"], group=csoGroup, display=display.data_window)
+
+periodK = input.int(14, title="Длина %K", minval=1, group=csoGroup, display=display.data_window)
+smoothK = input.int(8, title="Сглаживание %K", minval=1, group=csoGroup, display=display.data_window)
+periodD = input.int(3, title="Сглаживание %D", minval=1, group=csoGroup, display=display.data_window)
+
+lbL = input.int(5, title="Лево", group=csoGroup, display=display.data_window, inline="1", tooltip="Количество баров слева/справа от пивота для поиска дивергенции.")
+lbR = input.int(5, title="Право", group=csoGroup, display=display.data_window, inline="1", tooltip="Количество баров слева/справа от пивота для подтверждения.")
+rangeLower = input.int(5, title="Мин. диапазон", group=csoGroup, display=display.data_window, inline="2")
+rangeUpper = input.int(60, title="Макс. диапазон", group=csoGroup, display=display.data_window, inline="2", tooltip="Мин/макс диапазон (в барах) от пивота для валидной дивергенции.")
+plotBull = input.bool(true, title="Показывать бычьи", group=csoGroup, display=display.data_window, inline="3")
+plotHiddenBull = input.bool(true, title="Показывать скрытые бычьи", group=csoGroup, display=display.data_window, inline="3")
+plotBear = input.bool(true, title="Показывать медвежьи", group=csoGroup, display=display.data_window, inline="4")
+plotHiddenBear = input.bool(true, title="Показывать скрытые медвежьи", group=csoGroup, display=display.data_window, inline="4")
+
+showHighsLows = input.bool(true, title="Показывать экстремумы", group=csoGroup, display=display.data_window)
+lookbackPeriod = input.int(100, title="Период поиска экстремумов", minval=1, tooltip="Сколько баров назад искать последний максимум/минимум", group=csoGroup, display=display.data_window) 
+
+tradColours = input.bool(false, "Нейтральные свечи", group=csoGroup, display=display.data_window)
+
+// Цвета
+grey = input.color(#98989810, "Серый", group=csoGroup, display=display.data_window)
+white = input.color(#FFFFFF00, "Белый", group=csoGroup, display=display.data_window)
+bearColour = input.color(#ec4343, "Медвежий", group=csoGroup, display=display.data_window)
+bullColour = input.color(#3eb53e, "Бычий", group=csoGroup, display=display.data_window)
+noneColour = color.new(white,100)
+textColour = input.color(#FFFFFFFF, "Цвет текста", group=csoGroup, display=display.data_window)
+hiddenbearColour = color.new(bearColour, 80)
+hiddenbullColour = color.new(bullColour, 80)
+
+// Вычисления
+k = ta.sma(ta.stoch(close, high, low, periodK), smoothK)
+d = ta.sma(k, periodD)
+k_minus_d = k - d
+
+osc = displayMode == "Стандарт" ? k : displayMode == "Оба" ? k-50 : na
+
+// Поиск пивотов
+plFound = na(ta.pivotlow(osc, lbL, lbR)) ? false : true
+phFound = na(ta.pivothigh(osc, lbL, lbR)) ? false : true
+_inRange(cond) =>
+    bars = ta.barssince(cond == true)
+    rangeLower <= bars and bars <= rangeUpper
+
+// Обычная бычья дивергенция
+oscHL = osc[lbR] > ta.valuewhen(plFound, osc[lbR], 1) and _inRange(plFound[1])
+priceLL = low[lbR] < ta.valuewhen(plFound, low[lbR], 1)
+bullCondAlert = priceLL and oscHL and plFound
+bullCond = plotBull and bullCondAlert
+
+// Скрытая бычья дивергенция
+oscLL = osc[lbR] < ta.valuewhen(plFound, osc[lbR], 1) and _inRange(plFound[1])
+priceHL = low[lbR] > ta.valuewhen(plFound, low[lbR], 1)
+hiddenBullCondAlert = priceHL and oscLL and plFound
+hiddenBullCond = plotHiddenBull and hiddenBullCondAlert
+
+// Обычная медвежья дивергенция
+oscLH = osc[lbR] < ta.valuewhen(phFound, osc[lbR], 1) and _inRange(phFound[1])
+priceHH = high[lbR] > ta.valuewhen(phFound, high[lbR], 1)
+bearCondAlert = priceHH and oscLH and phFound
+bearCond = plotBear and bearCondAlert
+
+// Скрытая медвежья дивергенция
+oscHH = osc[lbR] > ta.valuewhen(phFound, osc[lbR], 1) and _inRange(phFound[1])
+priceLH = high[lbR] < ta.valuewhen(phFound, high[lbR], 1)
+hiddenBearCondAlert = priceLH and oscHH and phFound
+hiddenBearCond = plotHiddenBear and hiddenBearCondAlert
+
+// Цвет гистограммы
+newHigh = k_minus_d >= ta.highest(k_minus_d, lookbackPeriod)
+newLow = k_minus_d <= ta.lowest(k_minus_d, lookbackPeriod)
+histColor = newHigh ? bullColour : newLow ? bearColour : color.new(white, 60)
+
+// Отрисовка
+kLine = plot(displayMode == "Стандарт" ? k : displayMode == "Оба" ? k-50 : na, title="%K", color=grey, display=display.pane)
+dLine = plot(displayMode == "Стандарт" ? d : displayMode == "Оба" ? d-50 : na, title="%D", color=white, display=display.pane)
+//hPlot = plot(displayMode == "Гистограмма" or displayMode == "Оба" ? k_minus_d : na, title="Stoch Гистограмма", color=histColor, style=plot.style_histogram, display=display.pane)
+fill(kLine, dLine, color=k > d ? bullColour : bearColour)
+bgcolor(showHighsLows and k >= ta.highest(k, lookbackPeriod) ? color.new(color.red, 90) : na)
+bgcolor(showHighsLows and k <= ta.lowest(k, lookbackPeriod) ? color.new(color.blue, 90) : na)
+
+plot(plFound ? osc[lbR] : na, offset=-lbR, title="Обычная бычья", linewidth=2, color=(bullCond ? #9512a9 : noneColour), display=display.pane)
+//plotshape(bullCond ? osc[lbR] : na, offset=-lbR, title="Метка бычья", text=" Бык ", style=shape.labelup, location=location.absolute, color=bullColour, textcolor=textColour, display=display.pane)
+
+plot(plFound ? osc[lbR] : na, offset=-lbR, title="Скрытая бычья", linewidth=2, color=(hiddenBullCond ? #9512a9 : noneColour), display=display.pane)
+//plotshape(hiddenBullCond ? osc[lbR] : na, offset=-lbR, title="Метка скрытая бычья", text=" Скр. Бык ", style=shape.labelup, location=location.absolute, color=bullColour, textcolor=textColour, display=display.pane)
+
+plot(phFound ? osc[lbR] : na, offset=-lbR, title="Обычная медвежья", linewidth=2, color=(bearCond ? #9512a9 : noneColour), display=display.pane)
+//plotshape(bearCond ? osc[lbR] : na, offset=-lbR, title="Метка медвежья", text=" Медведь ", style=shape.labeldown, location=location.absolute, color=bearColour, textcolor=textColour, display=display.pane)
+
+plot(phFound ? osc[lbR] : na, offset=-lbR, title="Скрытая медвежья", linewidth=2, color=(hiddenBearCond ? #9512a9 : noneColour), display=display.pane)
+//plotshape(hiddenBearCond ? osc[lbR] : na, offset=-lbR, title="Метка скрытая медвежья", text=" Скр. Медведь ", style=shape.labeldown, location=location.absolute, color=bearColour, textcolor=textColour, display=display.pane)
+
+highValue = displayMode == "Стандарт" ? ta.highest(k, lookbackPeriod) : displayMode == "Гистограмма" ? ta.highest(k_minus_d, lookbackPeriod) : ta.highest(k, lookbackPeriod)-50
+lowValue = displayMode == "Стандарт" ? ta.lowest(k, lookbackPeriod) : displayMode == "Гистограмма" ? ta.lowest(k_minus_d, lookbackPeriod) : ta.lowest(k, lookbackPeriod)-50
+midValue = displayMode == "Стандарт" ? 50 : 0
+
+//plot(highValue, "Максимум", color=grey, display=display.pane)
+//plot(lowValue, "Минимум", color=grey, display=display.pane)
+//plot(midValue, "Середина", color=white, display=display.pane)
+
+barcolor(tradColours ? close > open ? white : grey : na)
+
+
+
+
+
+
+// === === === === === === === === === === === === === ===
+// === === === Блок SmartRSI === === === === === === === ===
+// === === === === === === === === === === === === === === ===
+
+//Inputs
+my_rsi_source = input.source(close, title="Источник RSI", group="SmartRSI", display=display.data_window)
+my_rsi_length = input.int(6, title="Длина RSI", group="SmartRSI", display=display.data_window)
+my_ma_length = input.int(2, title="Длина короткой MA", group="SmartRSI", display=display.data_window)
+my_rsi_smooth_length = input.int(7, title="Длина сглаживания RSI", group="SmartRSI", display=display.data_window)
+my_long_ma_length = input.int(60, title="Длина длинной MA", group="SmartRSI", display=display.data_window)
+my_long_ma_on = input.bool(true, title="Включить длинную MA", group="SmartRSI", display=display.data_window)
+my_signals_on = input.bool(true, title="Включить сигналы бык/медведь", group="SmartRSI", display=display.data_window)
+
+// === Цвета ===
+color_bull = input.color(#3eb43eAA, "Цвет бычий", group="SmartRSI", display=display.data_window)
+color_bear = input.color(#ec4343AA, "Цвет медвежий", group="SmartRSI", display=display.data_window)
+color_neutral = input.color(color.blue, "Цвет нейтральный", group="SmartRSI", display=display.data_window)
+color_ma_bull = input.color(#00e67600, "Цвет MA бычий", group="SmartRSI", display=display.data_window)
+color_ma_bear = input.color(#ff525200, "Цвет MA медвежий", group="SmartRSI", display=display.data_window)
+color_long_ma_bull = input.color(color.new(color.lime, 20), "Цвет длинной MA бычий", group="SmartRSI", display=display.data_window)
+color_long_ma_bear = input.color(color.new(color.red, 20), "Цвет длинной MA медвежий", group="SmartRSI", display=display.data_window)
+color_mid_line = input.color(color.white, "Цвет средней линии", group="SmartRSI", display=display.data_window)
+color_mid_line := color.new(color_mid_line, 80)
+color_res_line = input.color(#00bcd400, "Цвет линии 20/80", group="SmartRSI", display=display.data_window)
+color_table_bg = input.color(#00000000, "Цвет фона таблицы", group="SmartRSI", display=display.data_window)
+color_table_text = input.color(color.white, "Цвет текста таблицы", group="SmartRSI", display=display.data_window)
+color_fill_bull = input.color(#3eb43e77, "Цвет заливки бычий", group="SmartRSI", display=display.data_window)
+color_fill_bear = input.color(#ec434377, "Цвет заливки медвежий", group="SmartRSI", display=display.data_window)
+color_fill_bull_trans = input.color(#3eb43e25, "Цвет заливки бычий прозрачный", group="SmartRSI", display=display.data_window)
+color_fill_bear_trans = input.color(#ec434325, "Цвет заливки медвежий прозрачный", group="SmartRSI", display=display.data_window)
+
+//RSI
+my_rsi = ta.rsi(my_rsi_source, my_rsi_length)
+my_smooth_rsi = ta.sma(my_rsi, my_rsi_smooth_length)
+
+//Moving Average
+my_ma = ta.rma(my_smooth_rsi, my_ma_length)
+
+//Long Moving Average
+my_long_ma = ta.sma(my_smooth_rsi, my_long_ma_length)
+my_long_ma := my_long_ma * 2 - 100
+red_color = input.color(color.red, "Цвет красный", group="SmartRSI", display=display.data_window)
+green_color = input.color(color.green, "Цвет зелёный", group="SmartRSI", display=display.data_window)
+white_color = color.white
+min_ma = -15
+max_ma = 20
+ma_norm = math.max(math.min((my_long_ma - min_ma) / (max_ma - min_ma), 1), 0)
+
+// Градиент: 0 = красный, 0.5 = белый, 1 = зеленый
+float t = ma_norm
+float r = t < 0.5 ? 255 : int(255 * (1 - (t - 0.5) * 2))
+float g = t < 0.5 ? int(255 * (t * 2)) : 255
+float b = t < 0.5 ? int(255 * (t * 2)) : 150
+
+my_long_ma_color = color.rgb(int(r), int(g), int(b), 0)
+plotshape(my_long_ma, title="RSI Line", style=shape.circle, location=location.absolute, color=my_long_ma_color, size=size.small)
+//=//=//=//=//=//=//=//=//=//=//=//=//=//=//=
+
+//Plot RSI & Mid Line
+my_ma_line = plot(my_ma - 50, title="MA Line", color=my_smooth_rsi > my_ma ? color_ma_bull : color_ma_bear, linewidth=1, style=plot.style_line, display = display.pane)
+my_rsi_line = plot(my_smooth_rsi - 50, title="RSI Line", color=my_smooth_rsi > my_ma ? color_ma_bull : color_ma_bear, linewidth=1, style=plot.style_line, display = display.pane)
+
+//my_long_ma_plot = plot(my_long_ma, title="Long MA Line", color=my_smooth_rsi > my_long_ma ? color_long_ma_bull : color_long_ma_bear, linewidth=2, style=plot.style_line)
+my_mid_line = plot(0, "Mid Line", color_mid_line, display = display.pane)
+my_res_line = plot(-30, "20 Line", color_res_line, display = display.pane)
+my_sup_line = plot(30, "80 Line", color_res_line, display = display.pane)
+my_ma_signal_up = ta.crossover(my_smooth_rsi, my_long_ma)
+my_ma_signal_down = ta.crossunder(my_smooth_rsi, my_long_ma)
+
+//Background Fill
+fill(my_rsi_line, my_ma_line, color = my_smooth_rsi > my_ma ? color_fill_bull : color_fill_bear, title = "Color Fill RSI Line To MA Line")
+fill(my_ma_line, my_mid_line, color = my_ma < my_smooth_rsi and my_ma >= 50 ? color_fill_bull_trans : na, title = "Color Fill MA Line To Mid Line Above Mid Line")
+fill(my_rsi_line, my_mid_line, color = my_ma > my_smooth_rsi and my_smooth_rsi >= 50 ? color_fill_bull_trans : na, title = "Color Fill RSI Line To Mid Line Above Mid Line")
+fill(my_rsi_line, my_mid_line, color = my_ma < my_smooth_rsi and my_smooth_rsi < 50 ? color_fill_bear_trans : na, title = "Color Fill RSI Line To Mid Line Below Mid Line")
+fill(my_ma_line, my_mid_line, color = my_ma > my_smooth_rsi and my_ma < 50 ? color_fill_bear_trans : na, title = "Color Fill MA Line To Mid Line Below Mid Line")
+
+//Buy/Sell RSI
+my_sell = my_smooth_rsi < my_ma
+my_buy = my_smooth_rsi > my_ma
+
+//Label Info
+my_label_color = color.new(#000000, 0)
+my_label_text = ""
+my_label_color2 = color.new(#000000, 0)
+my_label_text2 = ""
+
+//Label Info Logic
+if my_buy
+    my_label_color := color_long_ma_bull
+    my_label_text := string("Bullish RSI")
+else if my_sell
+    my_label_color := color_long_ma_bear
+    my_label_text := string("Bearish RSI")
+else
+    my_label_color := color_neutral
+    my_label_text := string("Neutral RSI")
+    
+//Second Label Logic
+if my_smooth_rsi > my_long_ma and my_ma > my_long_ma and my_long_ma_on
+    my_label_color2 := color_long_ma_bull
+    my_label_text2 := string("Above Long MA")
+else if my_smooth_rsi < my_long_ma and my_ma < my_long_ma and my_long_ma_on
+    my_label_color2 := color_long_ma_bear
+    my_label_text2 := string("Below Long MA")
+
+
+
+
+
+
+// === === === === === === === === === === ===
+// === === Блок активности китов   === === ===
+// === === === === === === === === === === ===
+
+// === Whale Activity Waves ===
+
+whaleGroup = "Активность китов"
+whale_vol_mult = input.float(2.5, "Множитель объёма кита", group=whaleGroup, display=display.data_window)
+whale_vol_len = input.int(30, "Период объёма кита", group=whaleGroup, display=display.data_window)
+whale_wave_color = color.new(#a020f0, 0) // Фиолетовый
+
+whale_wave_top_value = input.int(80, "Верхняя граница волны кита", group=whaleGroup, display=display.data_window)
+whale_wave_bottom_value = input.int(-140, "Нижняя граница волны кита", group=whaleGroup, display=display.data_window)
+whale_wave_amplitude = input.int(11, "Амплитуда волны кита (макс. высота)", group=whaleGroup, display=display.data_window)
+whale_wave_threshold = input.float(0, "Порог силы волны кита", group=whaleGroup, display=display.data_window) // минимальная сила волны для отображения
+
+// === Настройки бара накопления ===
+accum_bar_color = color.new(color.yellow, 40)
+accum_bar_max_height = input.int(4, "Макс. высота бара накопления", group=whaleGroup, display=display.data_window)
+accum_bar_threshold = input.float(5, "Порог силы накопления", group=whaleGroup, display=display.data_window) // минимальная сила для отображения бара
+
+avg_vol = ta.sma(volume, whale_vol_len)
+avg_range = ta.sma(high - low, whale_vol_len)
+
+// === Активность покупателей (сверху вниз, только зелёные свечи) ===
+is_green_candle = close > open
+is_red_candle = close < open
+
+// === Фазы накопления китами ===
+// Покупки: крупный объем, маленькая свеча, зеленая свеча
+accum_buy_strength = is_green_candle ? math.min(volume / avg_vol * (avg_range / (high - low)), 2) : 0
+accum_buy_bar_height = accum_buy_strength * accum_bar_max_height
+accum_buy_bar_value = accum_buy_bar_height >= accum_bar_threshold ? whale_wave_top_value - accum_buy_bar_height : na
+
+plot(accum_buy_bar_value, title="Accumulation Buy Bar", color=accum_bar_color, style=plot.style_columns, linewidth=3, histbase=whale_wave_top_value, display = display.pane)
+
+// Продажи: крупный объем, маленькая свеча, красная свеча
+accum_sell_strength = is_red_candle ? math.min(volume / avg_vol * (avg_range / (high - low)), 2) : 0
+accum_sell_bar_height = accum_sell_strength * accum_bar_max_height
+accum_sell_bar_value = accum_sell_bar_height >= accum_bar_threshold ? whale_wave_bottom_value + accum_sell_bar_height : na
+
+plot(accum_sell_bar_value, title="Accumulation Sell Bar", color=accum_bar_color, style=plot.style_columns, linewidth=3, histbase=whale_wave_bottom_value, display = display.pane)
+
+whale_buy_active = (volume > avg_vol * whale_vol_mult or close > ta.highest(close, whale_vol_len) or (high - low) > avg_range * whale_vol_mult) and is_green_candle
+whale_buy_strength = whale_buy_active ? math.min((volume - avg_vol) / avg_vol, 2) : 0
+whale_buy_wave_size = whale_buy_strength * whale_wave_amplitude
+whale_buy_wave = whale_buy_wave_size >= whale_wave_threshold ? whale_wave_top_value - whale_buy_wave_size : na
+
+top_base_plot = plot(whale_wave_top_value, title="Whale Top Base", color=color.new(whale_wave_color, 90), style=plot.style_area, linewidth=1, histbase=whale_wave_top_value, display = display.pane)
+top_wave_plot = plot(whale_buy_wave, title="Whale Buy Wave", color=whale_buy_wave != whale_wave_top_value ? #a020f080 : #00000000, style=plot.style_area, linewidth=2, histbase=whale_wave_top_value, display = display.pane)
+fill(top_base_plot, top_wave_plot, whale_wave_top_value - 1, whale_wave_top_value - whale_wave_amplitude, #a020f000, #a020f090, title = "Color Gradient Fill")
+
+// === Активность продавцов (снизу вверх, только красные свечи) ===
+
+whale_sell_active = (volume > avg_vol * whale_vol_mult or close < ta.lowest(close, whale_vol_len) or (high - low) > avg_range * whale_vol_mult) and is_red_candle
+whale_sell_strength = whale_sell_active ? math.min((volume - avg_vol) / avg_vol, 2) : 0
+whale_sell_wave_size = whale_sell_strength * whale_wave_amplitude
+whale_sell_wave = whale_sell_wave_size >= whale_wave_threshold ? whale_wave_bottom_value + whale_sell_wave_size : na
+
+bottom_base_plot = plot(whale_wave_bottom_value, title="Whale Bottom Base", color=color.new(whale_wave_color, 90), style=plot.style_line, linewidth=1, histbase=whale_wave_bottom_value, display = display.pane)
+bottom_wave_plot = plot(whale_sell_wave, title="Whale Sell Wave", color=whale_sell_wave != whale_wave_bottom_value ? #a020f080 : #00000000, style=plot.style_line, linewidth=1, histbase=whale_wave_bottom_value, display = display.pane)
+fill(bottom_base_plot, bottom_wave_plot, whale_wave_bottom_value + 1, whale_wave_bottom_value + whale_wave_amplitude, #a020f000, #a020f090, title = "Color Gradient Fill")

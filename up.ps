@@ -1,0 +1,1543 @@
+//@version=6
+
+// JINADA v.1.0.0
+indicator('JINADA Up 💸', overlay=true, max_bars_back = 5000, max_boxes_count = 500, calc_bars_count = 2000)
+
+
+// === === === === === === === === === === === ===
+// === Блок уровней поддержки и сопротивления  ===
+// === === === === === === === === === === === ===
+
+type srl_level 
+    float srl_top
+    float srl_bot 
+    int srl_start
+type srl_drawing 
+    line srl_top
+    line srl_bot 
+    linefill srl_fill
+    label srl_lbl
+var srl_upper = array.new<srl_level>()
+var srl_lower = array.new<srl_level>()
+var srl_lower_draw = array.new<srl_drawing>()
+var srl_upper_draw = array.new<srl_drawing>()
+// ＩＮＰＵＴＳ ――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
+srl_len = input.int(25, "Length", group='Уровни П&С 🧑‍⚕️', tooltip = "Длина окна для поиска экстремумов (максимумов/минимумов) на графике", display=display.data_window)
+srl_col_upper = input.color(color.red, "Цвет верхних зон", group='Уровни П&С 🧑‍⚕️', inline = "cc", tooltip = "Цвет линий и заливки зон сопротивления (верхних уровней)", display=display.data_window)
+srl_col_lower = input.color(color.green, "Цвет нижних зон", group='Уровни П&С 🧑‍⚕️', inline = "cc", tooltip = "Цвет линий и заливки зон поддержки (нижних уровней)", display=display.data_window)
+srl_labels_position = input.string("Root", "Положение меток", ["Root", "LastBar"], group='Уровни П&С 🧑‍⚕️', tooltip = "Выберите, где отображать метки: у корня зоны или на последнем баре", display=display.data_window) == "Root"
+srl_area_height_percent = input.float(0.3, "Высота области, % от диапазона", group='Уровни П&С 🧑‍⚕️', minval=0.05, maxval=1, step=0.01, tooltip = "Высота зоны относительно диапазона между верхней и нижней границей", display=display.data_window)
+srl_line_transp = input.int(50, "Прозрачность линий", group='Уровни П&С 🧑‍⚕️', minval=0, maxval=100, step=1, tooltip = "Прозрачность линий зоны (0 — непрозрачные, 100 — полностью прозрачные)", display=display.data_window)
+srl_fill_transp = input.int(90, "Прозрачность заливки", group='Уровни П&С 🧑‍⚕️', minval=0, maxval=100, step=1, tooltip = "Прозрачность заливки зоны (0 — непрозрачная, 100 — полностью прозрачная)", display=display.data_window)
+srl_label_transp = input.int(45, "Прозрачность текста", group='Уровни П&С 🧑‍⚕️', minval=0, maxval=100, step=1, tooltip = "Прозрачность текста метки (0 — непрозрачный, 100 — полностью прозрачный)", display=display.data_window)
+srl_label_size = input.string("small", "Размер текста", group='Уровни П&С 🧑‍⚕️', options=["tiny", "small", "normal", "large"], tooltip = "Размер текста метки", display=display.data_window)
+// ＣＡＬＣＵＬＡＴＩＯＮＳ――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
+srl_h = ta.highest(srl_len)
+srl_l = ta.lowest(srl_len)
+srl_high_pivot = high[1] == srl_h[1] and high < srl_h
+srl_low_pivot  = low[1] == srl_l[1] and low > srl_l
+srl_atr = ta.atr(200)*0.5
+if srl_high_pivot
+    srl_up = srl_level.new(srl_h, srl_h-srl_atr, bar_index-1)
+    srl_upper.push(srl_up)
+if srl_low_pivot
+    srl_lw = srl_level.new(srl_l+srl_atr, srl_l, bar_index-1)
+    srl_lower.push(srl_lw)
+if srl_upper.size() > 10
+    srl_upper.shift()
+if srl_lower.size() > 10
+    srl_lower.shift()
+// ＰＬＯＴ ――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
+// PLOT UPPER ZONES
+if srl_upper.size() > 0
+    for srl_i in srl_upper
+        srl_top = srl_i.srl_top
+        srl_bot = srl_i.srl_bot
+        srl_strt = srl_i.srl_start
+        srl_l_top = srl_upper.last().srl_top
+        srl_l_bot = srl_upper.last().srl_bot
+        if high > srl_top and bar_index > srl_strt
+            srl_upper.remove(srl_upper.indexof(srl_i))
+        if srl_l_top < srl_top and srl_l_top > srl_bot
+            srl_upper.remove(srl_upper.indexof(srl_i))
+        if srl_l_bot < srl_top and srl_l_bot > srl_bot
+            srl_upper.remove(srl_upper.indexof(srl_i))
+    if barstate.islast
+        if srl_upper_draw.size() > 0
+            for srl_i in srl_upper_draw
+                line.delete(srl_i.srl_top)
+                line.delete(srl_i.srl_bot)
+                linefill.delete(srl_i.srl_fill)
+                label.delete(srl_i.srl_lbl)
+        for srl_i in srl_upper
+            srl_top = srl_i.srl_top
+            srl_bot = srl_i.srl_bot
+            srl_start = srl_i.srl_start
+            srl_f_start = srl_upper.first().srl_start
+            srl_max_duration = last_bar_index - srl_f_start
+            srl_duration = last_bar_index - srl_start
+            srl_color_fill = color.from_gradient(srl_duration, 0, srl_max_duration, color.new(srl_col_upper, 80), color.new(srl_col_upper, 20))
+            // Вычисляем координату x для правой стороны области
+            srl_label_x = bar_index
+            // Делаем область выше на 8 пикселей
+            srl_area_height = (srl_top - srl_bot) * srl_area_height_percent
+            srl_area_top = srl_top + srl_area_height
+            srl_area_bot = srl_bot - srl_area_height
+            srl_line_color = color.new(srl_col_upper, srl_line_transp)
+            srl_l1 = line.new(srl_start, srl_area_top, bar_index, srl_area_top, color = srl_line_color)
+            srl_l2 = line.new(srl_start, srl_area_bot, bar_index, srl_area_bot, color = srl_line_color)
+            srl_fill_color = color.new(srl_line_color, srl_fill_transp)
+            srl_fill = linefill.new(srl_l1, srl_l2, color = srl_fill_color)
+            srl_zone_text = srl_i.srl_start == srl_upper.first().srl_start ? "СИЛЬНЫЙ УРОВЕНЬ СОПРОТИВЛЕНИЯ" : "СЛАБЫЙ УРОВЕНЬ СОПРОТИВЛЕНИЯ"
+            srl_labl = label.new(srl_label_x, math.avg(srl_area_bot, srl_area_top), str.upper(srl_zone_text), style = label.style_label_right, textcolor = color.new(color.white, srl_label_transp), color = color(na), size = srl_label_size)
+            srl_upper_draw.push(srl_drawing.new(srl_l1, srl_l2, srl_fill, srl_labl))
+// PLOT LOWER ZONES
+if srl_lower.size() > 0
+    for srl_i in srl_lower
+        srl_top = srl_i.srl_top
+        srl_bot = srl_i.srl_bot
+        srl_strt = srl_i.srl_start
+        srl_l_top = srl_lower.last().srl_top
+        srl_l_bot = srl_lower.last().srl_bot
+        if low < srl_bot and bar_index > srl_strt
+            srl_lower.remove(srl_lower.indexof(srl_i))
+        if srl_l_top < srl_top and srl_l_top > srl_bot
+            srl_lower.remove(srl_lower.indexof(srl_i))
+        if srl_l_bot < srl_top and srl_l_bot > srl_bot
+            srl_lower.remove(srl_lower.indexof(srl_i))
+    if barstate.islast
+        if srl_lower_draw.size() > 0
+            for srl_i in srl_lower_draw
+                line.delete(srl_i.srl_top)
+                line.delete(srl_i.srl_bot)
+                linefill.delete(srl_i.srl_fill)
+                label.delete(srl_i.srl_lbl)
+        for srl_i in srl_lower
+            srl_top = srl_i.srl_top
+            srl_bot = srl_i.srl_bot
+            srl_start = srl_i.srl_start
+            srl_f_start = srl_lower.first().srl_start
+            srl_max_duration = last_bar_index - srl_f_start
+            srl_duration = last_bar_index- srl_start
+            srl_color_fill = color.from_gradient(srl_duration, 0, srl_max_duration, color.new(srl_col_lower, 80), color.new(srl_col_lower, 20))
+            // Вычисляем координату x для правой стороны области
+            srl_label_x = bar_index
+            // Делаем область выше на 8 пикселей
+            srl_area_height = (srl_top - srl_bot) * srl_area_height_percent
+            srl_area_top = srl_top + srl_area_height
+            srl_area_bot = srl_bot - srl_area_height
+            srl_line_color = color.new(srl_col_lower, srl_line_transp)
+            srl_l1 = line.new(srl_start, srl_area_top, bar_index, srl_area_top, color = srl_line_color)
+            srl_l2 = line.new(srl_start, srl_area_bot, bar_index, srl_area_bot, color = srl_line_color)
+            srl_fill_color = color.new(srl_line_color, srl_fill_transp)
+            srl_fill = linefill.new(srl_l1, srl_l2, color = srl_fill_color)
+            srl_zone_text = srl_i.srl_start == srl_lower.first().srl_start ? "СИЛЬНЫЙ УРОВЕНЬ ПОДДЕРЖКИ" : "СЛАБЫЙ УРОВЕНЬ ПОДДЕРЖКИ"
+            srl_labl = label.new(srl_label_x, math.avg(srl_area_bot, srl_area_top), str.upper(srl_zone_text), style = label.style_label_right, textcolor = color.new(color.white, srl_label_transp), color = color(na), size = srl_label_size)
+            srl_lower_draw.push(srl_drawing.new(srl_l1, srl_l2, srl_fill, srl_labl))
+
+
+
+// === === === === === === === ===
+// === Блок средних скользящих ===
+// === === === === === === === ===
+
+
+ma_type     = input.string("rma", "Тип", group="Средние скользящие 📈", options=["sma", "ema", "wma", "rma"], display=display.data_window)
+ma_opacity  = input.int(80, "Прозрачность линии (0-100)", group="Средние скользящие 📈", minval=0, maxval=100, display=display.data_window)
+ma_width    = input.int(2, "Толщина линии", group="Средние скользящие 📈", minval=1, maxval=10, display=display.data_window)
+
+ma_len1     = input.int(14, "Период MA1", group="Средние скользящие 📈", display=display.data_window)
+ma_len2     = input.int(35, "Период MA2", group="Средние скользящие 📈", display=display.data_window)
+ma_len3     = input.int(75, "Период MA3", group="Средние скользящие 📈", display=display.data_window)
+ma_len4     = input.int(100, "Период MA4", group="Средние скользящие 📈", display=display.data_window)
+ma_len5     = input.int(200, "Период MA5", group="Средние скользящие 📈", display=display.data_window)
+ma_len6     = input.int(150, "Период MA6", group="Средние скользящие 📈", display=display.data_window)
+
+f_ma(source, len, type) =>
+    if type == "ema"
+        ta.ema(source, len)
+    else
+        if type == "wma"
+            ta.wma(source, len)
+        else
+            if type == "rma"
+                ta.rma(source, len)
+            else
+                ta.sma(source, len)
+
+ma1 = f_ma(close, ma_len1, ma_type)
+ma2 = f_ma(close, ma_len2, ma_type)
+ma3 = f_ma(close, ma_len3, ma_type)
+ma4 = f_ma(close, ma_len4, ma_type)
+ma5 = f_ma(close, ma_len5, ma_type)
+ma6 = f_ma(close, ma_len6, ma_type)
+
+ma1_width = math.max(1, math.round(ma_width * (ma_len1 / ma_len5)))
+ma2_width = math.max(1, math.round(ma_width * (ma_len2 / ma_len5)))
+ma3_width = math.max(1, math.round(ma_width * (ma_len3 / ma_len5)))
+ma4_width = math.max(1, math.round(ma_width * (ma_len4 / ma_len5)))
+ma5_width = math.max(1, math.round(ma_width * (ma_len5 / ma_len5)))
+ma6_width = ma_width
+
+ma1_diff = ma1 - ma1[1]
+ma2_diff = ma2 - ma2[1]
+ma3_diff = ma3 - ma3[1]
+ma4_diff = ma4 - ma4[1]
+ma5_diff = ma5 - ma5[1]
+ma6_diff = ma6 - ma6[1]
+
+fill_green = color.new(color.green, 95)
+fill_red   = color.new(color.red, 95)
+
+pos_count = 0
+if ma1_diff >= 0
+    pos_count := pos_count + 1
+if ma2_diff >= 0
+    pos_count := pos_count + 1
+if ma3_diff >= 0
+    pos_count := pos_count + 1
+if ma4_diff >= 0
+    pos_count := pos_count + 1
+if ma5_diff >= 0
+    pos_count := pos_count + 1
+if ma6_diff >= 0
+    pos_count := pos_count + 1
+
+neg_count = 6 - pos_count
+is_uptrend = false
+if pos_count > neg_count
+    is_uptrend := true
+
+ma_up_colors_1 = color.new(color.green, ma_opacity)
+ma_up_colors_2 = color.new(color.green, ma_opacity)
+ma_up_colors_3 = color.new(color.green, ma_opacity)
+ma_up_colors_4 = color.new(color.green, ma_opacity)
+ma_up_colors_5 = color.new(color.green, ma_opacity)
+ma_up_colors_6 = color.new(color.green, ma_opacity)
+ma_down_colors_1 = color.new(color.red, ma_opacity)
+ma_down_colors_2 = color.new(color.red, ma_opacity)
+ma_down_colors_3 = color.new(color.red, ma_opacity)
+ma_down_colors_4 = color.new(color.red, ma_opacity)
+ma_down_colors_5 = color.new(color.red, ma_opacity)
+ma_down_colors_6 = color.new(color.red, ma_opacity)
+
+p_close = plot(close, color=color.new(color.gray, 100), title="Close", linewidth=1, editable=false, display=display.pane)
+p_ma1 = plot(ma1, color=is_uptrend ? ma_up_colors_1 : ma_down_colors_1, linewidth=ma1_width, title="MA 1", trackprice=true, display=display.pane)
+p_ma2 = plot(ma2, color=is_uptrend ? ma_up_colors_2 : ma_down_colors_2, linewidth=ma2_width, title="MA 2", trackprice=true, display=display.pane)
+p_ma3 = plot(ma3, color=is_uptrend ? ma_up_colors_3 : ma_down_colors_3, linewidth=ma3_width, title="MA 3", trackprice=true, display=display.pane)
+p_ma4 = plot(ma4, color=is_uptrend ? ma_up_colors_4 : ma_down_colors_4, linewidth=ma4_width, title="MA 4", trackprice=true, display=display.pane)
+p_ma5 = plot(ma5, color=is_uptrend ? ma_up_colors_5 : ma_down_colors_5, linewidth=ma5_width, title="MA 5", trackprice=true, display=display.pane)
+p_ma6 = plot(ma6, color=is_uptrend ? ma_up_colors_6 : ma_down_colors_6, linewidth=ma6_width, title="MA 6", trackprice=true, display=display.pane)
+
+fill_color = fill_red
+if is_uptrend
+    fill_color := fill_green
+fill(p_close, p_ma1, color=fill_color, title="Fill MA1")
+fill(p_close, p_ma2, color=fill_color, title="Fill MA2")
+fill(p_close, p_ma3, color=fill_color, title="Fill MA3")
+fill(p_close, p_ma4, color=fill_color, title="Fill MA4")
+fill(p_close, p_ma5, color=fill_color, title="Fill MA5")
+fill(p_close, p_ma6, color=fill_color, title="Fill MA6")
+
+
+
+
+
+// === === === === === === === === ===
+// === Блок стрелки направления MA ===
+// === === === === === === === === ===
+
+avg_diff = (ma1_diff + ma2_diff + ma3_diff + ma4_diff + ma5_diff + ma6_diff) / 6
+
+var line arrow_line1 = na
+
+draw_arrow(x0, y0, angle_deg, length, color, width) =>
+    angle_rad = angle_deg * 0.0174533
+    x1 = x0 + math.cos(angle_rad) * length
+    y1 = y0 + math.sin(angle_rad) * length
+    head_len = length * 0.2
+    head_angle = 30
+    angle_left  = (angle_deg + 180 - head_angle) * 0.0174533
+    angle_right = (angle_deg + 180 + head_angle) * 0.0174533
+    x2 = x1 + math.cos(angle_left) * head_len
+    y2 = y1 + math.sin(angle_left) * head_len
+    x3 = x1 + math.cos(angle_right) * head_len
+    y3 = y1 + math.sin(angle_right) * head_len
+    l1 = line.new(math.round(x0), y0, math.round(x1), y1, xloc=xloc.bar_index, extend=extend.none, color=color, width=width)
+    l2 = line.new(math.round(x1), y1, math.round(x2), y2, xloc=xloc.bar_index, extend=extend.none, color=color, width=width)
+    l3 = line.new(math.round(x1), y1, math.round(x3), y3, xloc=xloc.bar_index, extend=extend.none, color=color, width=width)
+    l1, l2, l3
+
+// === Рисуем стрелку направления MA на последнем баре ===
+ma_avg = (ma1 + ma2 + ma3 + ma4 + ma5 + ma6) / 6
+ma_avg_prev = (ma1[1] + ma2[1] + ma3[1] + ma4[1] + ma5[1] + ma6[1]) / 6
+ma_avg_diff = ma_avg - ma_avg_prev
+arrow_angle = math.atan(ma_avg_diff) * 57.2958 // угол наклона средней MA
+
+// === Динамическая длина стрелки по размеру свечи ===
+candle_size = math.abs(close - open)
+arrow_length = math.min(100, math.max(50, candle_size * 10))
+
+arrow_color = color.red
+if avg_diff >= 0
+    arrow_color := color.green
+
+arrow_color_transp = color.new(arrow_color, 60)
+
+// === Удаляем старую стрелку на каждом баре ===
+if not na(arrow_line1)
+    line.delete(arrow_line1)
+    arrow_line1 := na
+// === Рисуем одну центральную линию стрелки на последнем баре ===
+if barstate.islast
+    angle_rad = arrow_angle * 0.0174533
+    x1 = bar_index + math.cos(angle_rad) * arrow_length
+    y1 = open + math.sin(angle_rad) * arrow_length
+    //
+    arrow_line1 := line.new(bar_index, open, math.round(x1), y1, xloc=xloc.bar_index, extend=extend.none, color=arrow_color_transp, width=2)
+
+
+
+
+
+
+// === === === === === === === === === === ===
+// === Блок силы продавцов и покупателей   ===
+// === === === === === === === === === === ===
+
+body = close - open 
+lower_wick = open < close ? open - low : close - low
+upper_wick = open > close ? open - high : math.abs(close - high)
+rng = high - low 
+
+// Пороги уверенности для сильного и слабого давления
+confidence_strong = input.float(0.965, "Порог уверенности для сильного сигнала (0-1)", group="Силы продавцов и покупателей 🟢🟤", minval=0.0, maxval=1.0, display=display.data_window)
+confidence_weak = input.float(0.3, "Порог уверенности для слабого сигнала (0-1)", group="Силы продавцов и покупателей 🟢🟤", minval=0.0, maxval=1.0, display=display.data_window)
+
+// Параметры для гибкой настройки условий
+body_ratio_strong = input.float(0.7, "Минимальное отношение тела для сильного сигнала", group="Силы продавцов и покупателей 🟢🟤", minval=0.0, maxval=1.0, display=display.data_window)
+lower_wick_ratio = input.float(0.15, "Максимальное отношение нижнего хвоста для сильного продавца", group="Силы продавцов и покупателей 🟢🟤", minval=0.0, maxval=1.0, display=display.data_window)
+upper_wick_ratio = input.float(0.15, "Максимальное отношение верхнего хвоста для сильного покупателя", group="Силы продавцов и покупателей 🟢🟤", minval=0.0, maxval=1.0, display=display.data_window)
+lower_wick_ratio_weak = input.float(0.25, "Минимальное отношение нижнего хвоста для слабого продавца", group="Силы продавцов и покупателей 🟢🟤", minval=0.0, maxval=1.0, display=display.data_window)
+upper_wick_ratio_weak = input.float(0.3, "Минимальное отношение верхнего хвоста для слабого покупателя", group="Силы продавцов и покупателей 🟢🟤", minval=0.0, maxval=1.0, display=display.data_window)
+
+// Сильное давление продавцов: длинная красная свеча, закрытие возле Low, маленький нижний хвост
+strong_seller = (body < 0) and (math.abs(body)/rng > body_ratio_strong) and (lower_wick/rng < lower_wick_ratio) and (math.abs(body)/rng > confidence_strong)
+// Слабое давление продавцов: свеча красная, но длинный нижний хвост, тело маленькое
+weak_seller = (body < 0) and (lower_wick/rng > lower_wick_ratio_weak) and (math.abs(body)/rng < confidence_weak)
+
+// Сильное давление покупателей: длинная зеленая свеча, закрытие возле High, маленький верхний хвост
+strong_buyer = (body > 0) and (math.abs(body)/rng > body_ratio_strong) and (upper_wick/rng < upper_wick_ratio) and (math.abs(body)/rng > confidence_strong)
+// Слабое давление покупателей: свеча зеленая, но длинный верхний хвост, тело маленькое
+weak_buyer = (body > 0) and (upper_wick/rng > upper_wick_ratio_weak) and (math.abs(body)/rng < confidence_weak)
+
+// Цвета с прозрачностью 40%
+red_circle = color.new(color.red, 70)
+green_circle = color.new(color.green, 70)
+
+// Отображение на графике кружками
+plotshape(strong_seller, title='Strong Seller', location=location.abovebar, color=red_circle, style=shape.circle, size=size.small)
+plotshape(weak_seller, title='Weak Seller', location=location.abovebar, color=red_circle, style=shape.circle, size=size.tiny)
+plotshape(strong_buyer, title='Strong Buyer', location=location.belowbar, color=green_circle, style=shape.circle, size=size.small)
+plotshape(weak_buyer, title='Weak Buyer', location=location.belowbar, color=green_circle, style=shape.circle, size=size.tiny)
+
+
+// === === === === === === === ===
+// Блок определения тренда === ===
+// === === === === === === === ===
+
+len = input.int(100, title="Длина периода", group="Тренд 📈", minval=1, maxval=4999, display=display.data_window)
+trend_percentile = input.float(0.95, title="Процентиль для тренда (0.0-1.0)", group="Тренд 📈", minval=0.5, maxval=1.0, step=0.01, tooltip="Используется для устойчивости к выбросам: 0.95 = 95-й процентиль", display=display.data_window)
+
+// Получаем устойчивые значения high/low через процентиль
+get_percentile(src, p, len) =>
+    arr = array.new_float(len, na)
+    for i = 0 to len-1
+        array.set(arr, i, src[i])
+    array.sort(arr, order.ascending)
+    idx = math.round((len-1)*p)
+    array.get(arr, idx)
+
+// Для диапазона используем не только процентиль, но и min/max для касания линий
+high_max = ta.highest(high, len)
+low_min = ta.lowest(low, len)
+high_percentile = get_percentile(high, trend_percentile, len)
+low_percentile = get_percentile(low, 1-trend_percentile, len)
+
+// Смешиваем процентиль и экстремумы для диапазона
+high_end = (high_percentile + high_max) / 2
+low_start = (low_percentile + low_min) / 2
+
+high_reg = ta.linreg(high, len, 0)
+low_reg  = ta.linreg(low, len, 0)
+
+slope = (high_reg - high[len]) / len
+
+high_start = high_end - slope * len
+low_end   = low_start + slope * len
+
+x1 = bar_index - len
+x2 = bar_index
+
+var line hi_line = na
+var line lo_line = na
+var line upper_stop_line = na
+var line lower_stop_line = na
+
+stop_percent = input.float(30.0, title="Процент для стоп-уровней", group="Тренд 📈", minval=0.1, maxval=100.0, display=display.data_window) / 100.0
+
+range_height = high_end - low_start
+upper_stop_start = high_start + range_height * stop_percent
+upper_stop_end = high_end + range_height * stop_percent
+lower_stop_start = low_start - range_height * stop_percent
+lower_stop_end = low_end - range_height * stop_percent
+
+stop_color_base = input.color(color.rgb(255, 0, 174), title="Цвет стоп-уровней", group="Тренд 📈", display=display.data_window)
+main_transp = input.int(20, title="Прозрачность основных линий (0-100)", group="Тренд 📈", minval=0, maxval=100, display=display.data_window)
+stop_transp = input.int(80, title="Прозрачность стоп-уровней (0-100)", group="Тренд 📈", minval=0, maxval=100, display=display.data_window)
+main_style = input.string("dotted", title="Стиль основных линий", group="Тренд 📈", options=["solid", "dotted", "dashed"], display=display.data_window)
+stop_style = input.string("dashed", title="Стиль стоп-уровней", group="Тренд 📈", options=["solid", "dotted", "dashed"], display=display.data_window)
+main_width = input.int(2, title="Толщина основных линий", group="Тренд 📈", minval=1, maxval=10, display=display.data_window)
+stop_width = input.int(1, title="Толщина стоп-уровней", group="Тренд 📈", minval=1, maxval=10, display=display.data_window)
+
+main_style_val = line.style_solid
+if main_style == "dotted"
+    main_style_val := line.style_dotted
+if main_style == "dashed"
+    main_style_val := line.style_dashed
+stop_style_val = line.style_solid
+if stop_style == "dotted"
+    stop_style_val := line.style_dotted
+if stop_style == "dashed"
+    stop_style_val := line.style_dashed
+
+trend = "sideways"
+high_slope = high_end - high_start
+low_slope = low_end - low_start
+slope_threshold = input.float(11, title="Порог наклона для тренда (в % от диапазона)", group="Тренд 📈", minval=0.001, step=0.001, display=display.data_window) / 100.0
+rrng = high_end - low_end
+high_slope_coef = rrng != 0 ? (high_slope / rrng) : 0
+low_slope_coef = rrng != 0 ? (low_slope / rrng) : 0
+
+if high_slope_coef > slope_threshold and low_slope_coef > slope_threshold
+    trend := "up"
+else if high_slope_coef < -slope_threshold and low_slope_coef < -slope_threshold
+    trend := "down"
+
+trend_color = color.purple
+if trend == "up"
+    trend_color := color.green
+if trend == "down"
+    trend_color := color.red
+main_color_final = color.new(trend_color, main_transp)
+stop_color_final = color.new(stop_color_base, stop_transp)
+
+flat_slope = trend == "sideways" ? 0 : slope
+high_start_adj = trend == "sideways" ? high_end : high_start
+high_end_adj = high_end
+low_start_adj = trend == "sideways" ? low_end : low_start
+low_end_adj = low_end
+upper_stop_start_adj = trend == "sideways" ? upper_stop_end : upper_stop_start
+upper_stop_end_adj = upper_stop_end
+lower_stop_start_adj = trend == "sideways" ? lower_stop_end : lower_stop_start
+lower_stop_end_adj = lower_stop_end
+
+if bar_index >= len
+    if not na(hi_line)
+        line.delete(hi_line)
+    if not na(lo_line)
+        line.delete(lo_line)
+    if not na(upper_stop_line)
+        line.delete(upper_stop_line)
+    if not na(lower_stop_line)
+        line.delete(lower_stop_line)
+    hi_line := line.new(x1, high_start_adj, x2, high_end_adj, color=main_color_final, style=main_style_val, width=main_width, extend=extend.none)
+    lo_line := line.new(x1, low_start_adj,  x2, low_end_adj, color=main_color_final, style=main_style_val, width=main_width, extend=extend.none)
+    upper_stop_line := line.new(x1, upper_stop_start_adj, x2, upper_stop_end_adj, color=stop_color_final, style=stop_style_val, width=stop_width, extend=extend.none)
+    lower_stop_line := line.new(x1, lower_stop_start_adj, x2, lower_stop_end_adj, color=stop_color_final, style=stop_style_val, width=stop_width, extend=extend.none)
+
+
+// === === === === === === === === === === === === === ===
+// === Блок итогового торгового сигнала                ===
+// === === === === === === === === === === === === === ===
+
+import TradersReality/Traders_Reality_Lib/1 as trLib
+
+bool setCandleColors = input.bool(true, title='Enable PVSRA Colors', group='PVSRA Докраска свечей 💅', inline='setCandle', display=display.data_window)
+color redVectorColor = input.color(title='Вектор: Красный', group='PVSRA Докраска свечей 💅', defval=color.red, inline='vectors', display=display.data_window)
+color greenVectorColor = input.color(title='Зеленый', group='PVSRA Докраска свечей 💅', defval=color.lime, inline='vectors', display=display.data_window)
+color violetVectorColor = input.color(title='Фиолетовый', group='PVSRA Докраска свечей 💅', defval=color.fuchsia, inline='vectors', display=display.data_window)
+color blueVectorColor = input.color(title='Синий', group='PVSRA Докраска свечей 💅', defval=color.blue, inline='vectors', display=display.data_window)
+color regularCandleUpColor = input.color(title='Регулярный: Свеча вверх', group='PVSRA Докраска свечей 💅', defval=#999999, inline='nonVectors', display=display.data_window)
+color regularCandleDownColor = input.color(title='Регулярный: Свеча вниз', group='PVSRA Докраска свечей 💅', defval=#4d4d4d, inline='nonVectors', display=display.data_window)
+bool overrideSym = input.bool(group='PVSRA Докраска свечей 💅', title='Override PVSRA Data', defval=false, inline='pvsra', display=display.data_window)
+string pvsraSym = input.string(group='PVSRA Докраска свечей 💅', title='', defval='INDEX:TICKERUSD', tooltip='Example: BINANCE:BTCUSDT+COINBASE:BTCUSD', inline='pvsra', display=display.data_window)
+int SignalAccuracy = input.int(title="Точность расчета сигнала (0-10)", group='Настройки сигнала 🔔', defval=1, minval=0, maxval=10, tooltip='Устанавливает количество дополнительных подтверждений для сигналов покупки и продажи.', display=display.data_window)
+bool GodMode = input.bool(true, group='Настройки сигнала 🔔', title='Moon Mode', tooltip='Adds extended Buy Signals to Chart. (LESS ACCURATE)', display=display.data_window)
+bool ShowSell = input.bool(true, group='Настройки сигнала 🔔', title='Show Sell Signals', tooltip='Adds Sell Signals to Chart. (INACCURATE)', display=display.data_window)
+bool ShowBullTrap = input.bool(false, group='Настройки сигнала 🔔', title='Show Bull Trap Signals', tooltip='Adds Trap Signal, indicating possible Bull Traps.', display=display.data_window)
+bool ShowBearTrap = input.bool(false, group='Настройки сигнала 🔔', title='Show Bear Trap Signals', tooltip='Adds Trap Signal, indicating possible Bear Traps.', display=display.data_window)
+
+// Requesting PVSRA Data
+pvsraVolume = request.security(overrideSym ? pvsraSym : syminfo.tickerid, '', volume, barmerge.gaps_off, barmerge.lookahead_off)
+pvsraHigh = request.security(overrideSym ? pvsraSym : syminfo.tickerid, '', high, barmerge.gaps_off, barmerge.lookahead_off)
+pvsraLow = request.security(overrideSym ? pvsraSym : syminfo.tickerid, '', low, barmerge.gaps_off, barmerge.lookahead_off)
+pvsraClose = request.security(overrideSym ? pvsraSym : syminfo.tickerid, '', close, barmerge.gaps_off, barmerge.lookahead_off)
+pvsraOpen = request.security(overrideSym ? pvsraSym : syminfo.tickerid, '', open, barmerge.gaps_off, barmerge.lookahead_off)
+[pvsraColor, alertFlag, averageVolume, volumeSpread, highestVolumeSpread] = trLib.calcPvsra(pvsraVolume, pvsraHigh, pvsraLow, pvsraClose, pvsraOpen, redVectorColor, greenVectorColor, violetVectorColor, blueVectorColor, regularCandleDownColor, regularCandleUpColor)
+
+// Setting Candle Color based on PSVRA data
+var color pvsraCandleColor = na
+if setCandleColors
+    pvsraCandleColor := pvsraColor
+barcolor(pvsraCandleColor)
+
+// Calculating EMAs
+ema50 = ta.ema(close, 50)
+ema100 = ta.ema(close, 100)  // Added 100 EMA
+ema200 = ta.ema(close, 200)
+
+// Declare Signal Logic Variables
+var float lastRedVectorBelow50 = na
+var float lastGreenVectorOver200 = 0
+var int lastBuySignal = na
+var float trapSignalBarIndex = na
+var int redVectorCountUnderEMA50 = 0
+var float lastBlueVectorAbove200 = na
+var float sell2SignalBarIndex = na
+
+// Pre-Signal Logic, Signal Conditions/Criteria
+if (pvsraColor == redVectorColor and close < ema50)
+    redVectorCountUnderEMA50 := redVectorCountUnderEMA50 + 1
+if (pvsraColor == redVectorColor and open < ema50 and close < ema50)
+    lastRedVectorBelow50 := bar_index
+if ((pvsraColor == blueVectorColor or pvsraColor == greenVectorColor) and open > ema200 and open > ema50)
+    lastBlueVectorAbove200 := bar_index
+if (pvsraColor == greenVectorColor and close > ema200) //Maybe add "and close > ema50"
+    lastGreenVectorOver200 := lastGreenVectorOver200 + 1
+
+// Main Buy Signal Logic based on Signal Accuracy Setting
+if (not na(lastRedVectorBelow50) and pvsraColor == greenVectorColor and open > ema50 and (na(lastBuySignal) or bar_index > lastBuySignal))
+    if  close < ema200 and redVectorCountUnderEMA50 >= SignalAccuracy
+        label.new(x=bar_index, y=low, text="BUY", color=color.green, style=label.style_label_up, size=size.small)
+        lastBuySignal := bar_index
+        lastRedVectorBelow50 := na // Reset after
+        redVectorCountUnderEMA50 := 0
+
+// Advanced Buy Signal Logic based on Signal Accuracy and Moon Mode Setting
+if (not na(lastRedVectorBelow50) and pvsraColor == greenVectorColor and open > ema50 and (na(lastBuySignal) or bar_index > lastBuySignal))
+    if  GodMode == true and close > ema200 and redVectorCountUnderEMA50 >= SignalAccuracy
+        label.new(x=bar_index, y=low, text="BUY", color=color.green, style=label.style_label_up, size=size.small)
+        lastBuySignal := bar_index
+        lastRedVectorBelow50 := na // Reset after 
+        redVectorCountUnderEMA50 := 0
+
+// Sell Signal condition based on Signal Accuracy Setting
+if (not na(lastBlueVectorAbove200) and (pvsraColor == redVectorColor) and open > ema200 and close > ema200 and bar_index == lastBlueVectorAbove200 + 1)
+    if ShowSell == true and lastGreenVectorOver200 >= SignalAccuracy
+        sell2SignalBarIndex := bar_index
+        label.new(x=bar_index, y=high, text= "SELL", color=color.red, style=label.style_label_down, size=size.small)
+        lastBlueVectorAbove200 := na // Reset after triggering the Sell signal
+        lastGreenVectorOver200 := 0 // Reset after triggering the Sell signal
+
+// Bull Trap Signal Logic ("BULL TRAP")
+if bar_index == lastBuySignal + 1 and (pvsraCandleColor == redVectorColor or pvsraCandleColor == violetVectorColor)
+    if ShowBullTrap == true
+        trapSignalBarIndex := bar_index
+        label.new(x=bar_index, y=high, text= "BULL TRAP", color=color.red, style=label.style_label_down, size=size.small)
+
+// Bear Trap Signal Logic ("BEAR TRAP")
+if bar_index == sell2SignalBarIndex + 1 and pvsraCandleColor == greenVectorColor
+    if ShowBearTrap == true
+        trapSignalBarIndex := bar_index
+        label.new(x=bar_index, y=low, text= "BEAR TRAP", color=color.green, style=label.style_label_up, size=size.small)
+
+// Alert Conditions
+alertcondition(condition=bar_index == lastBuySignal, title="BUY Signal", message="A BUY signal was triggered at {{close}}.")
+alertcondition(condition=bar_index == trapSignalBarIndex, title="TRAP Signal", message="A TRAP signal was triggered at {{close}}.")
+alertcondition(condition=bar_index == sell2SignalBarIndex, title="Sell2 Signal", message="A SELL signal was triggered at {{close}}.")
+
+
+
+
+
+
+
+// === === === === === === === === ===
+// === Блок дивергенций и трендов  ===
+// === === === === === === === === ===
+
+// Параметры для дивергенций
+div_rsi_len      = input.int(14, "Длина RSI", group="Дивергенции", display=display.data_window)
+div_rsi_low      = input.int(30, "Нижний порог RSI", group="Дивергенции", display=display.data_window)
+div_rsi_high     = input.int(70, "Верхний порог RSI", group="Дивергенции", display=display.data_window)
+div_sma_len      = input.int(20, "Длина SMA", group="Дивергенции", display=display.data_window)
+div_vol_sma_len  = input.int(10, "Длина SMA объёма", group="Дивергенции", display=display.data_window)
+div_high_len     = input.int(10, "Длина диапазона High/Low", group="Дивергенции", display=display.data_window)
+div_stoch_len    = input.int(14, "Длина Stoch", group="Дивергенции", display=display.data_window)
+div_stoch_low    = input.int(20, "Нижний порог Stoch", group="Дивергенции", display=display.data_window)
+div_stoch_high   = input.int(80, "Верхний порог Stoch", group="Дивергенции", display=display.data_window)
+div_ema_fast     = input.int(21, "Длина быстрой EMA", group="Дивергенции", display=display.data_window)
+div_ema_slow     = input.int(55, "Длина медленной EMA", group="Дивергенции", display=display.data_window)
+div_label_min    = input.int(2, "Минимум сигналов для метки", group="Дивергенции", display=display.data_window)
+
+div1 = ta.crossover(ta.rsi(close, div_rsi_len), div_rsi_low)
+div2 = ta.crossunder(ta.rsi(close, div_rsi_len), div_rsi_high)
+div5 = ta.crossover(close, ta.sma(close, div_sma_len))
+div6 = ta.crossunder(close, ta.sma(close, div_sma_len))
+div7 = ta.crossover(volume, ta.sma(volume, div_vol_sma_len))
+div8 = ta.crossunder(volume, ta.sma(volume, div_vol_sma_len))
+div9 = high > ta.highest(high, div_high_len) and low < ta.lowest(low, div_high_len)
+div10 = ta.crossover(ta.stoch(close, high, low, div_stoch_len), div_stoch_low)
+div11 = ta.crossunder(ta.stoch(close, high, low, div_stoch_len), div_stoch_high)
+div14 = ta.crossover(ta.ema(close, div_ema_fast), ta.ema(close, div_ema_slow))
+div15 = ta.crossunder(ta.ema(close, div_ema_fast), ta.ema(close, div_ema_slow))
+
+div_count = (div1 ? 1 : 0) + (div2 ? 1 : 0) + (div5 ? 1 : 0) + (div6 ? 1 : 0) + (div7 ? 1 : 0) + (div8 ? 1 : 0) + (div9 ? 1 : 0) + (div10 ? 1 : 0) + (div11 ? 1 : 0) + (div14 ? 1 : 0) + (div15 ? 1 : 0)
+
+// Пример тренда через EMA:
+ema_len = input.int(55, "Длина EMA для тренда", group="Дивергенции", display=display.data_window)
+trend_is_up = ta.ema(close, ema_len) > ta.ema(close[10], ema_len)
+my_trend_color = trend_is_up ? color.green : color.red
+
+if div_count > div_label_min
+    label.new(x=bar_index, y=high + (high-low)*2, text=str.tostring(div_count), style=label.style_label_down, color=color.new(color.white, 98), textcolor=my_trend_color, size=size.small, textalign=text.align_center)
+
+
+
+
+
+
+
+// === === === === === === === ===
+// === Блок магнитной цены     ===
+// === === === === === === === ===
+
+sma250 = ta.sma(close, 1000)
+magnet_price = sma250
+
+magnet_offset_bars = input.int(20, "Смещение по барам", group="Магнит 🧲", minval=0, maxval=100, step=1, tooltip="Количество баров вправо для отображения метки магнитной цены", display=display.data_window)
+magnet_label_color = input.color(color.new(color.white, 98), "Цвет метки", group="Магнит 🧲", display=display.data_window)
+magnet_label_textcolor = input.color(color.blue, "Цвет текста", group="Магнит 🧲", display=display.data_window)
+magnet_label_style = input.string("label_left", "Стиль метки", options=["label_left", "label_right", "label_down", "label_up"], group="Магнит 🧲", display=display.data_window)
+magnet_label_size = input.string("small", "Размер текста", options=["tiny", "small", "normal", "large"], group="Магнит 🧲", display=display.data_window)
+magnet_label_format = input.string(format.mintick, "Формат цены", options=[format.mintick, format.volume, format.percent, format.price], group="Магнит 🧲", display=display.data_window)
+magnet_label_text = input.string("🧲", "Текст метки", group="Магнит 🧲", display=display.data_window)
+magnet_highest_bars = 500
+
+var label magnet_label = na
+if bar_index == ta.highest(bar_index, magnet_highest_bars)
+    if not na(magnet_label)
+        label.delete(magnet_label)
+    magnet_label := label.new(x = bar_index + magnet_offset_bars,y = magnet_price,text = str.tostring(magnet_price, magnet_label_format) + " " + magnet_label_text,color = magnet_label_color,textcolor = magnet_label_textcolor,style = magnet_label_style == "label_left" ? label.style_label_left :magnet_label_style == "label_right" ? label.style_label_right :magnet_label_style == "label_down" ? label.style_label_down :label.style_label_up,size = magnet_label_size)
+
+
+
+
+
+
+
+// === === === === === === 
+// === Volume Profile  ===
+// === === === === === === 
+
+//------------------------
+// Settings
+//------------------------
+
+display = display.all - display.status_line
+
+vn_volumeNodesGroup = 'Профиль объема'
+
+vn_peakTTip = 'Пиковый узел объема определяется, когда значения объема для N предыдущих и N последующих узлов ниже, чем у анализируемого, где N задается опцией "Процент обнаружения узлов %"'
+vn_peaksShow = input.string('Peaks', 'Пики объема', options = ['Peaks', 'Clusters', 'None'], inline = 'vnP', tooltip = vn_peakTTip, group = vn_volumeNodesGroup, display = display)
+vn_peakVolumeColor = input.color(color.new(#8942fb, 70), '', inline = 'vnP', group = vn_volumeNodesGroup)
+vn_peaksNumberOfNodes = input.int(9, '  Процент обнаружения узлов %', minval = 0, maxval = 100, group = vn_volumeNodesGroup, display = display) / 100
+vn_peaksShow := vn_peaksNumberOfNodes == 0 ? 'None' : vn_peaksShow
+
+vn_troughsTTip  = 'Впадинный узел объема определяется, когда значения объема для N предыдущих и N последующих узлов превышают значение анализируемого, где N задается опцией "Процент обнаружения узлов %"'
+vn_troughsShow = input.string('None', 'Впадины объема', options = ['Troughs', 'Clusters', 'None'], inline = 'vnT', tooltip = vn_troughsTTip, group = vn_volumeNodesGroup, display = display)
+vn_troughVolumeColor = input.color(color.new(color.gray, 50), '', inline = 'vnT', group = vn_volumeNodesGroup)
+vn_troughsNumberOfNodes = input.int(7, '  Процент обнаружения узлов %', minval = 0, maxval = 100, group = vn_volumeNodesGroup, display = display) / 100
+vn_troughsShow := vn_troughsNumberOfNodes == 0 ? 'None' : vn_troughsShow
+
+vn_thresholdTTip = 'Пороговое значение в процентах используется для обнаружения пиковых/впадинных узлов объема. Если задано, обнаружение будет игнорировать значения узлов ниже указанного порога.'
+vn_VolumeNodeThreshold = input.int(1, 'Порог узла объема %', minval = 0, maxval = 100, tooltip = vn_thresholdTTip, group = vn_volumeNodesGroup, display = display) / 100
+
+vn_highestNVolumeNodes = input.int(0, 'Наибольшие узлы объема', minval = 0, maxval = 31, inline = 'vnL', group = vn_volumeNodesGroup, display = display)
+vn_highestVolumeColor = input.color(color.new(color.orange, 25), '', inline = 'vnL', group = vn_volumeNodesGroup)
+
+vn_lowestNVolumeNodes = input.int(0, 'Наименьшие узлы объема', minval = 0, maxval = 31, inline = 'vnH', group = vn_volumeNodesGroup, display = display)
+vn_lowestVolumeColor = input.color(color.new(color.navy, 25), '', inline = 'vnH', group = vn_volumeNodesGroup)
+
+vp_componentsGroup = 'Профиль объема - Компоненты'
+
+vp_profileShow = input.bool(true, 'Профиль объема', inline = 'vp', group = vp_componentsGroup)
+vp_profileGradientColors = input.string('Градиентные цвета', '', options = ['Градиентные цвета', 'Классические цвета' ], inline = 'vp', group = vp_componentsGroup, display = display)
+vp_valueAreaUpColor = input.color(color.new(#d31b59, 30), '  Зона стоимости вверх / вниз', inline = 'VA', group = vp_componentsGroup, display = display)
+vp_valueAreaDwonColor = input.color(color.new(#9c26af, 30), '/', inline = 'VA', group = vp_componentsGroup, display = display)
+vp_profileUpVolumeColor = input.color(color.new(#5d606b, 50), '  Объем профиля вверх / вниз', inline = 'VP', group = vp_componentsGroup, display = display)
+vp_profileDownVolumeColor = input.color(color.new(#d1d4dc, 50), '/', inline = 'VP', group = vp_componentsGroup, display = display)
+
+vp_pocShow = input.string('None', 'Точка контроля', options = ['Developing', 'Regular', 'None'], inline = 'poc', group = vp_componentsGroup, display = display)
+vp_pocColor = input.color(#9c26af, '', inline = 'poc', group = vp_componentsGroup)
+vp_pocWidth = input.int(2, 'Толщина', inline = 'poc', group = vp_componentsGroup, display = display)
+
+vp_vahShow = input.bool(false, 'Верхняя граница зоны стоимости (VAH)', inline = 'vah', group = vp_componentsGroup)
+vp_vahColor = input.color(#d31b59, '', inline = 'vah', group = vp_componentsGroup)
+
+vp_valShow = input.bool(false, 'Нижняя граница зоны стоимости (VAL)', inline = 'val', group = vp_componentsGroup)
+vp_valColor = input.color(#d31b59, '', inline = 'val', group = vp_componentsGroup)
+
+vp_profileLevels = input.string('Small', "Метки цен профиля", options=['Tiny', 'Small', 'Normal', 'None'], group = vp_componentsGroup, display = display)
+
+vp_displayGroup = 'Профиль объема - Настройки отображения'
+
+vp_profileLength = input.int(360, 'Длина профиля (баров)', minval = 10, maxval = 5000, step = 10, group = vp_displayGroup, display = display)
+vp_profileLength := last_bar_index < vp_profileLength ? last_bar_index : vp_profileLength - 1
+
+vp_valueAreaThreshold = input.float(70, 'Зона стоимости (%)', minval = 0, maxval = 100, group = vp_displayGroup, display = display) / 100
+
+vp_profilePlracment = input.string('Right', 'Расположение профиля', options = ['Right', 'Left'], group = vp_displayGroup, display = display)
+profilePlacementRight = vp_profilePlracment == 'Right'
+vp_profileNumberOfRows = input.int(100, 'Количество строк профиля' , minval = 30, maxval = 130 , step = 10, group = vp_displayGroup, display = display)
+vp_profileWidth = input.float(31, 'Ширина профиля', minval = 0, maxval = 250, group = vp_displayGroup, display = display) / 100
+vp_profileHorizontalOffset = input.int(13, 'Горизонтальное смещение профиля', maxval = 50, group = vp_displayGroup, display = display)
+
+vp_valueAreaBackground = input.bool(false, 'Фон зоны стоимости  ', inline = 'vBG', group = vp_displayGroup)
+vp_valueAreaBackgroundColor = input.color(color.new(#d31b59, 89), '', inline = 'vBG', group = vp_displayGroup)
+
+vp_profileBackground = input.bool(false, 'Фон диапазона профиля ', inline = 'pBG', group = vp_displayGroup)
+vp_profileBackgroundColor  = input.color(color.new(#d31b59, 95), '', inline = 'pBG', group = vp_displayGroup)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// User Defined Types
+//---------------------------------------------------------------------------------------------------------------------{
+
+type BAR
+    float open   = open
+    float high   = high
+    float low    = low
+    float close  = close
+    float volume = volume
+    int   index  = bar_index
+
+type barData
+    float [] barHigh
+    float [] barLow
+    float [] barVolume
+    bool  [] barPolarity
+    int   [] barCount
+
+type volumeData
+    float [] totalVolume
+    float [] bullishVolume
+    float [] bearishVolume
+    int   [] endProfileIndex
+    bool  [] peakVolume
+    bool  [] troughVolume
+
+type volumeProfile
+    box         []  boxes
+    chart.point []  pocPoints
+    polyline        pocPolyline
+    int             pocLevel
+    int             vahLevel
+    int             valLevel
+    int             startIndex
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Variables
+//---------------------------------------------------------------------------------------------------------------------{
+
+BAR bar = BAR.new()
+BAR [] ltfBarData = array.new<BAR> (1, BAR.new())
+
+var barData barDataArray = barData.new(
+     array.new <float> (na),
+     array.new <float> (na),
+     array.new <float> (na),
+     array.new <bool>  (na),
+     array.new <int>   (na)
+ )
+
+volumeData volumeDataArray = volumeData.new(
+     array.new <float> (vp_profileNumberOfRows, 0.),
+     array.new <float> (vp_profileNumberOfRows, 0.),
+     array.new <float> (vp_profileNumberOfRows, 0.),
+     array.new <int>   (vp_profileNumberOfRows, 0 ),
+     array.new <bool>  (vp_profileNumberOfRows, false),
+     array.new <bool>  (vp_profileNumberOfRows, false)
+ )
+
+var volumeProfile VP = volumeProfile.new(
+     array.new<box>         (na),
+     array.new<chart.point> (na),
+     polyline.new           (na), na, na, na, na
+ )
+
+var float highestPrice = na
+var float lowestPrice = na
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Functions / Methods
+//---------------------------------------------------------------------------------------------------------------------{
+
+renderLine(_x1, _y1, _x2, _y2, _xloc, _extend, _color, _style, _width) =>
+    var id = line.new(_x1, _y1, _x2, _y2, _xloc, _extend, _color, _style, _width)
+    line.set_xy1(id, _x1, _y1)
+    line.set_xy2(id, _x2, _y2)
+    line.set_color(id, _color)
+
+renderLabel(_x, _y, _text, _color, _style, _textcolor, _size, _tooltip) =>
+    var lb = label.new(_x, _y, _text, xloc.bar_index, yloc.price, _color, _style, _textcolor, _size, text.align_left, _tooltip)
+    lb.set_xy(_x, _y)
+    lb.set_text(_text)
+    lb.set_tooltip(_tooltip)
+    lb.set_textcolor(_textcolor)
+
+requestBarData(_lowerTimeframe) => request.security_lower_tf(syminfo.tickerid, _lowerTimeframe, BAR.new(), ignore_invalid_timeframe = true)
+
+calculateTimeframe(_depth) =>
+    int tfInMs = timeframe.in_seconds(timeframe.period)
+    int  mInMS = 60
+
+    if _depth == 2
+        switch
+            tfInMs <                 30  =>  '1S'
+            tfInMs <          1 * mInMS  =>  '5S'
+
+            tfInMs <=        15 * mInMS  =>   '1'
+            tfInMs <=        60 * mInMS  =>   '5'
+            tfInMs <=       240 * mInMS  =>  '15'
+            tfInMs <=      1440 * mInMS  =>  '60'
+            => 'D'
+
+    else if _depth == 1
+        switch
+            tfInMs <                 15  =>  '1S'
+            tfInMs <                 30  =>  '5S'
+            tfInMs <          1 * mInMS  => '15S'
+
+            tfInMs <=         5 * mInMS  =>   '1'
+            tfInMs <=        15 * mInMS  =>   '5'
+            tfInMs <=        60 * mInMS  =>  '15'
+            tfInMs <=       240 * mInMS  =>  '60'
+            tfInMs <=      1440 * mInMS  => '240'
+            => 'D'
+
+getTextSize(_text) =>
+    if _text != 'None'
+        switch _text
+            'Tiny'   => size.tiny
+            'Small'  => size.small
+            'Normal' => size.normal
+            => size.auto
+
+//---------------------------------------------------------------------------------------------------------------------}
+// Calculations - Volume Profile
+//---------------------------------------------------------------------------------------------------------------------{
+
+profileLevesSize  = getTextSize(vp_profileLevels)
+
+if bar.index == last_bar_index - vp_profileLength
+    VP.startIndex := bar.index
+    lowestPrice := bar.low
+    highestPrice := bar.high
+else if bar.index > last_bar_index - vp_profileLength
+    lowestPrice := math.min(bar.low, lowestPrice)
+    highestPrice := math.max(bar.high, highestPrice)
+
+//if vp_profileLength <= 200
+//    ltfBarData := requestBarData(calculateTimeframe(2))
+//else
+if vp_profileLength <= 700
+    ltfBarData := requestBarData(calculateTimeframe(2))
+else
+    ltfBarData := array.new<BAR> (1, BAR.new(bar.open, bar.high, bar.low, bar.close, bar.volume))
+
+if barstate.ishistory and (bar.index >= last_bar_index - vp_profileLength) and bar.index < last_bar_index and ltfBarData.size() > 0
+
+    log.info("yaz_kizim {0} {1}", ltfBarData.get(0).volume, na(nz(ltfBarData.get(0).volume)) )
+
+    if ltfBarData.size() > 0 and not na(nz(ltfBarData.get(0).volume))
+        for currentLtfBar = 0 to ltfBarData.size() - 1
+            barDataArray.barHigh.push(ltfBarData.get(currentLtfBar).high)
+            barDataArray.barLow.push(ltfBarData.get(currentLtfBar).low)
+            barDataArray.barVolume.push(ltfBarData.get(currentLtfBar).volume)
+            barDataArray.barPolarity.push(ltfBarData.get(currentLtfBar).close > ltfBarData.get(currentLtfBar).open)
+
+        barDataArray.barCount.push(ltfBarData.size())
+
+priceStep = (highestPrice - lowestPrice) / vp_profileNumberOfRows
+
+if barstate.islast and ltfBarData.size() > 0 //  barDataArray.barVolume.size() > 0 //
+
+    if VP.boxes.size() > 0
+        for boxIndex = 0 to VP.boxes.size() - 1
+            box.delete(VP.boxes.shift())
+
+    if barDataArray.barCount.size() > vp_profileLength
+        barCount = barDataArray.barCount.shift()
+        for barCountIndex = 0 to barCount - 1
+            barDataArray.barHigh.shift()
+            barDataArray.barLow.shift()
+            barDataArray.barVolume.shift()
+            barDataArray.barPolarity.shift()
+
+    VP.pocPoints.clear()
+    VP.pocPolyline.delete()
+
+    if ltfBarData.size() > 0 and not na(nz(ltfBarData.get(0).volume))
+        for currentLtfBar = 0 to ltfBarData.size() - 1
+            barDataArray.barHigh.push(ltfBarData.get(currentLtfBar).high)
+            barDataArray.barLow.push(ltfBarData.get(currentLtfBar).low)
+            barDataArray.barVolume.push(ltfBarData.get(currentLtfBar).volume)
+            barDataArray.barPolarity.push(ltfBarData.get(currentLtfBar).close > ltfBarData.get(currentLtfBar).open)
+
+        barDataArray.barCount.push(ltfBarData.size())
+
+    barIndex = vp_profileLength
+    numberOfBars = 0
+    arraySize = barDataArray.barVolume.size()
+
+    for arrayIndex = 0 to arraySize - 1
+
+        levelHigh = barDataArray.barHigh.get(arrayIndex)
+        levelLow = barDataArray.barLow.get(arrayIndex)
+        levelVolume = barDataArray.barVolume.get(arrayIndex)
+
+        // Shoutout to @tkarolak for contributing to the code's optimization! Much appreciated.
+
+        int startSlotIndex = math.max(math.floor((levelLow - lowestPrice) / priceStep), 0)
+        int endSlotIndex = math.min(math.floor((levelHigh - lowestPrice) / priceStep), vp_profileNumberOfRows - 1)
+
+        for priceLevelIndex = startSlotIndex to endSlotIndex
+
+            float priceLevel = lowestPrice + priceLevelIndex * priceStep
+
+            volumeProportion = switch
+                levelLow >= priceLevel and levelHigh > priceLevel + priceStep => (priceLevel + priceStep - levelLow) / (levelHigh - levelLow)
+                levelHigh <= priceLevel + priceStep and levelLow < priceLevel => (levelHigh - priceLevel) / (levelHigh - levelLow)
+                levelLow >= priceLevel and levelHigh <= priceLevel + priceStep => 1
+                => priceStep / (levelHigh - levelLow)
+
+            volumeDataArray.totalVolume.set(priceLevelIndex, volumeDataArray.totalVolume.get(priceLevelIndex) + levelVolume * volumeProportion)
+
+            if barDataArray.barPolarity.get(arrayIndex)
+                volumeDataArray.bullishVolume.set(priceLevelIndex, volumeDataArray.bullishVolume.get(priceLevelIndex) + levelVolume * volumeProportion)
+
+        if vp_pocShow == 'Developing'
+            if arrayIndex == barDataArray.barCount.get(vp_profileLength - barIndex)
+                VP.pocPoints.push(chart.point.from_index((bar[barIndex]).index, math.avg((bar[barIndex]).high, (bar[barIndex]).low)))
+                VP.pocPoints.push(chart.point.from_index((bar[barIndex]).index + 1, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max()) + .5) * priceStep))
+                numberOfBars += barDataArray.barCount.get(vp_profileLength - barIndex)
+                barIndex  -= 1
+            else if arrayIndex == (numberOfBars + barDataArray.barCount.get(vp_profileLength - barIndex)) and numberOfBars != 0
+                VP.pocPoints.push(chart.point.from_index((bar[barIndex]).index + 1, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max()) + .5) * priceStep))
+                numberOfBars += barDataArray.barCount.get(vp_profileLength - barIndex)
+                barIndex  -= 1
+            else if barIndex == 0
+                VP.pocPoints.push(chart.point.from_index((bar[barIndex]).index + 1, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max()) + .5) * priceStep))
+                numberOfBars += barDataArray.barCount.get(vp_profileLength - barIndex)
+
+    VP.pocPolyline := polyline.new(VP.pocPoints, false, false, xloc.bar_index, vp_pocColor, color(na), line.style_solid, vp_pocWidth)
+
+    for volumeIndex = 0 to vp_profileNumberOfRows - 1
+        bearishVolume = 2 * volumeDataArray.bullishVolume.get(volumeIndex) - volumeDataArray.totalVolume.get(volumeIndex)
+        volumeDataArray.bearishVolume.set(volumeIndex, volumeDataArray.bearishVolume.get(volumeIndex) + bearishVolume * (bearishVolume > 0 ? 1 : -1) )
+
+    VP.pocLevel := volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max())
+    totalTradedVolume = volumeDataArray.totalVolume.sum() * vp_valueAreaThreshold
+    valueAreaVolume = VP.pocLevel != -1 ? volumeDataArray.totalVolume.get(VP.pocLevel) : 0
+    VP.vahLevel := VP.pocLevel
+    VP.valLevel := VP.pocLevel
+
+    while valueAreaVolume < totalTradedVolume
+        if VP.valLevel == 0 and VP.vahLevel == vp_profileNumberOfRows - 1
+            break
+
+        volumeAbovePOC = 0.
+        if VP.vahLevel < vp_profileNumberOfRows - 1
+            volumeAbovePOC := volumeDataArray.totalVolume.get(VP.vahLevel + 1)
+
+        volumeBelowPOC = 0.
+        if VP.valLevel > 0
+            volumeBelowPOC := volumeDataArray.totalVolume.get(VP.valLevel - 1)
+
+        if volumeBelowPOC == 0 and volumeAbovePOC == 0
+            break
+
+        if volumeAbovePOC >= volumeBelowPOC
+            valueAreaVolume  += volumeAbovePOC
+            VP.vahLevel += 1
+        else
+            valueAreaVolume  += volumeBelowPOC
+            VP.valLevel -= 1
+
+    vahPrice = lowestPrice + (VP.vahLevel + 1.) * priceStep
+    pocPrice = lowestPrice + (VP.pocLevel + .5) * priceStep
+    valPrice = lowestPrice + (VP.valLevel + .0) * priceStep
+
+    profilePlottingLength = vp_profileLength > 360 ? 360 : vp_profileLength
+    profileWidth = profilePlottingLength * vp_profileWidth
+    profileHorizontalOffset = int(profileWidth + vp_profileHorizontalOffset)
+
+    if vp_profileShow and profilePlacementRight and vp_pocShow == 'Developing'
+        renderLine(last_bar_index, pocPrice, profileHorizontalOffset + int(last_bar_index - profileWidth + 1), pocPrice, xloc.bar_index, extend.none, vp_pocColor, line.style_solid, vp_pocWidth)
+
+    if vp_vahShow
+        renderLine(VP.startIndex, vahPrice,
+                   profilePlacementRight ? (vp_profileShow ? profileHorizontalOffset : 0) + last_bar_index : last_bar_index,
+                   vahPrice, xloc.bar_index, extend.none, vp_vahColor, line.style_solid, 1)
+
+    if vp_pocShow == 'Regular'
+        renderLine(VP.startIndex, pocPrice, profilePlacementRight ? vp_profileShow ? profileHorizontalOffset + int(last_bar_index - profileWidth + 1) : last_bar_index : last_bar_index, pocPrice, xloc.bar_index, extend.none, vp_pocColor, line.style_solid, vp_pocWidth)
+
+    if vp_valShow
+        renderLine(VP.startIndex, valPrice,
+                   profilePlacementRight ? (vp_profileShow ? profileHorizontalOffset : 0) + last_bar_index : last_bar_index,
+                   valPrice, xloc.bar_index, extend.none, vp_valColor, line.style_solid, 1)
+
+    if vp_valueAreaBackground
+        VP.boxes.push(box.new(VP.startIndex, valPrice, last_bar_index, vahPrice, vp_valueAreaBackgroundColor, 1, line.style_dotted, bgcolor = vp_valueAreaBackgroundColor))
+
+    if vp_profileBackground
+        VP.boxes.push(box.new(VP.startIndex, lowestPrice, last_bar_index, highestPrice, vp_profileBackgroundColor, 1, line.style_dotted, bgcolor = vp_profileBackgroundColor))
+
+    if vp_profileLevels != 'None' and VP.pocLevel != -1
+        renderLabel(profilePlacementRight ? (vp_profileShow ? profileHorizontalOffset : 0) + last_bar_index : vp_profileShow ? VP.startIndex : last_bar_index,
+                     highestPrice, str.tostring(highestPrice, format.mintick), color.new(chart.fg_color, 89), label.style_label_down, chart.fg_color, profileLevesSize, 'Profile High')
+
+        renderLabel(profilePlacementRight ? (vp_profileShow ? profileHorizontalOffset : 0) + last_bar_index : last_bar_index,
+                     vahPrice, str.tostring(vahPrice, format.mintick), color.new(vp_vahColor, 89), label.style_label_left, vp_vahColor, profileLevesSize, 'Value Area High')
+
+        renderLabel(profilePlacementRight ? (vp_profileShow ? profileHorizontalOffset : 0) + last_bar_index : last_bar_index,
+                     pocPrice, str.tostring(pocPrice, format.mintick), color.new(vp_pocColor, 89), label.style_label_left, vp_pocColor, profileLevesSize, 'Point of Control')
+
+        renderLabel(profilePlacementRight ? (vp_profileShow ? profileHorizontalOffset : 0) + last_bar_index : last_bar_index,
+                     valPrice, str.tostring(valPrice, format.mintick), color.new(vp_valColor, 89), label.style_label_left, vp_valColor, profileLevesSize, 'Value Area Low')
+
+        renderLabel(profilePlacementRight ? (vp_profileShow ? profileHorizontalOffset : 0) + last_bar_index : vp_profileShow ? VP.startIndex : last_bar_index,
+                     lowestPrice, str.tostring(lowestPrice, format.mintick), color.new(chart.fg_color, 89), label.style_label_up, chart.fg_color, profileLevesSize, 'Profile Low')
+
+    for volumeNodeLevel = 0 to vp_profileNumberOfRows - 1
+
+        if vp_profileShow
+            if vp_profileGradientColors == 'Gradient Colors'
+                vp_valueAreaUpColor       := color.from_gradient(volumeDataArray.totalVolume.get(volumeNodeLevel) / volumeDataArray.totalVolume.max(), 0, 1, color.new(vp_valueAreaUpColor      , 95), color.new(vp_valueAreaUpColor      , 0))
+                vp_valueAreaDwonColor     := color.from_gradient(volumeDataArray.totalVolume.get(volumeNodeLevel) / volumeDataArray.totalVolume.max(), 0, 1, color.new(vp_valueAreaDwonColor    , 95), color.new(vp_valueAreaDwonColor    , 0))
+                vp_profileUpVolumeColor   := color.from_gradient(volumeDataArray.totalVolume.get(volumeNodeLevel) / volumeDataArray.totalVolume.max(), 0, 1, color.new(vp_profileUpVolumeColor  , 95), color.new(vp_profileUpVolumeColor  , 0))
+                vp_profileDownVolumeColor := color.from_gradient(volumeDataArray.totalVolume.get(volumeNodeLevel) / volumeDataArray.totalVolume.max(), 0, 1, color.new(vp_profileDownVolumeColor, 95), color.new(vp_profileDownVolumeColor, 0))
+
+            startProfileIndex = profilePlacementRight ?
+                                 profileHorizontalOffset + int(last_bar_index - volumeDataArray.bullishVolume.get(volumeNodeLevel) / volumeDataArray.totalVolume.max() * profileWidth) :
+                                 VP.startIndex
+            endProfileIndex   = profilePlacementRight ?
+                                 profileHorizontalOffset + last_bar_index :
+                                 int(startProfileIndex + volumeDataArray.bullishVolume.get(volumeNodeLevel) / volumeDataArray.totalVolume.max() * profileWidth)
+
+            VP.boxes.push(box.new(startProfileIndex, lowestPrice + (volumeNodeLevel + .1) * priceStep, endProfileIndex, lowestPrice + (volumeNodeLevel + .9) * priceStep,
+                                   color(na), bgcolor = volumeNodeLevel >= VP.valLevel and volumeNodeLevel <= VP.vahLevel ? vp_valueAreaUpColor : vp_profileUpVolumeColor))
+
+            startProfileIndex := profilePlacementRight ? startProfileIndex : endProfileIndex
+            endProfileIndex   := profilePlacementRight ?
+                                 startProfileIndex - int( (volumeDataArray.totalVolume.get(volumeNodeLevel) - volumeDataArray.bullishVolume.get(volumeNodeLevel)) / volumeDataArray.totalVolume.max() * profileWidth) :
+                                 startProfileIndex + int( (volumeDataArray.totalVolume.get(volumeNodeLevel) - volumeDataArray.bullishVolume.get(volumeNodeLevel)) / volumeDataArray.totalVolume.max() * profileWidth)
+
+            VP.boxes.push(box.new(startProfileIndex, lowestPrice + (volumeNodeLevel + .1) * priceStep, endProfileIndex, lowestPrice + (volumeNodeLevel + .9) * priceStep,
+                                   color(na), bgcolor = volumeNodeLevel >= VP.valLevel and volumeNodeLevel <= VP.vahLevel ? vp_valueAreaDwonColor : vp_profileDownVolumeColor))
+            volumeDataArray.endProfileIndex.set(volumeNodeLevel, endProfileIndex)
+
+    // Node detection logic and visualisation remains unchanged from v5
+
+    if  vn_peaksShow != 'None' or  vn_troughsShow != 'None'
+        var int startVolumeNodeIndex = na, var int endVolumeNodeIndex = na
+        var bool peakUpperNth = false, var bool peakLowerNth = false
+
+        peaksNumberOfNodes = int(vp_profileNumberOfRows * vn_peaksNumberOfNodes)
+
+        tempPeakTotalVolume = volumeDataArray.totalVolume.copy()
+
+        for index = 1 to peaksNumberOfNodes
+            tempPeakTotalVolume.unshift(0.)
+            tempPeakTotalVolume.push(0.)
+
+        for volumeNodeLevel = 0 to vp_profileNumberOfRows - 1 + 2 * peaksNumberOfNodes
+
+            if vn_peaksShow != 'None' and volumeNodeLevel >= 2 * peaksNumberOfNodes
+
+                for currentVolumeNode = volumeNodeLevel - 2 * peaksNumberOfNodes to volumeNodeLevel - peaksNumberOfNodes - 1
+                    if tempPeakTotalVolume.get(volumeNodeLevel - peaksNumberOfNodes) <= tempPeakTotalVolume.get(currentVolumeNode)
+                        peakUpperNth := false
+                        break
+                    else
+                        peakUpperNth := true
+
+                for currentVolumeNode = volumeNodeLevel - peaksNumberOfNodes + 1 to volumeNodeLevel
+                    if tempPeakTotalVolume.get(volumeNodeLevel - peaksNumberOfNodes) <= tempPeakTotalVolume.get(currentVolumeNode)
+                        peakLowerNth := false
+                        break
+                    else
+                        peakLowerNth := true
+
+                if peakUpperNth and peakLowerNth and tempPeakTotalVolume.get(volumeNodeLevel - peaksNumberOfNodes) / tempPeakTotalVolume.max() > vn_VolumeNodeThreshold
+
+                    startVolumeNodeIndex := vp_profileShow ? profilePlacementRight ?
+                                                             VP.startIndex :
+                                                             volumeDataArray.endProfileIndex.get(volumeNodeLevel - 2 * peaksNumberOfNodes) :
+                                             VP.startIndex
+
+                    endVolumeNodeIndex   := vp_profileShow ? profilePlacementRight ?
+                                                             volumeDataArray.endProfileIndex.get(volumeNodeLevel - 2 * peaksNumberOfNodes) :
+                                                             last_bar_index :
+                                             last_bar_index
+
+                    vn_peakVolumeColor := vn_peaksShow == 'Peaks' ? vn_peakVolumeColor : color.from_gradient(tempPeakTotalVolume.get(volumeNodeLevel - peaksNumberOfNodes) / tempPeakTotalVolume.max(), 0, 1, color.new(vn_peakVolumeColor, 95), color.new(vn_peakVolumeColor, 65))
+
+                    VP.boxes.push(box.new(startVolumeNodeIndex, lowestPrice + (volumeNodeLevel - 2 * peaksNumberOfNodes + .1) * priceStep, endVolumeNodeIndex, lowestPrice + (volumeNodeLevel - 2 * peaksNumberOfNodes + .9) * priceStep,
+                                          color(na), bgcolor = vn_peakVolumeColor))
+
+                    if vn_peaksShow == 'Clusters'
+
+                        for currentVolumeNode = volumeNodeLevel - 2 * peaksNumberOfNodes to volumeNodeLevel
+
+                            if currentVolumeNode >= peaksNumberOfNodes and currentVolumeNode <= vp_profileNumberOfRows - 1 + peaksNumberOfNodes
+                                if not volumeDataArray.peakVolume.get(currentVolumeNode - peaksNumberOfNodes)
+
+                                    startVolumeNodeIndex := vp_profileShow ? profilePlacementRight ?
+                                                                         VP.startIndex :
+                                                                         volumeDataArray.endProfileIndex.get(currentVolumeNode - peaksNumberOfNodes) :
+                                                         VP.startIndex
+
+                                    endVolumeNodeIndex   := vp_profileShow ? profilePlacementRight ?
+                                                                         volumeDataArray.endProfileIndex.get(currentVolumeNode - peaksNumberOfNodes) :
+                                                                         last_bar_index :
+                                                         last_bar_index
+
+                                    VP.boxes.push(box.new(startVolumeNodeIndex, lowestPrice + (currentVolumeNode - peaksNumberOfNodes + .0) * priceStep, endVolumeNodeIndex, lowestPrice + (currentVolumeNode - peaksNumberOfNodes + 1.) * priceStep,
+                                                       color(na), bgcolor = vn_peakVolumeColor))
+                                    volumeDataArray.peakVolume.set(currentVolumeNode - peaksNumberOfNodes, true)
+
+        tempPeakTotalVolume.clear()
+
+        var bool troughUpperNth = false, var bool troughLowerNth = false
+        troughsNumberOfNodes = int(vp_profileNumberOfRows * vn_troughsNumberOfNodes)
+
+        tempTroughTotalVolume = volumeDataArray.totalVolume.copy()
+
+        for index = 1 to troughsNumberOfNodes
+            tempTroughTotalVolume.unshift(volumeDataArray.totalVolume.max())
+            tempTroughTotalVolume.push(volumeDataArray.totalVolume.max())
+
+        for volumeNodeLevel = 0 to vp_profileNumberOfRows - 1 + 2 * troughsNumberOfNodes
+
+            if vn_troughsShow != 'None' and volumeNodeLevel >= 2 * troughsNumberOfNodes
+
+                for currentVolumeNode = volumeNodeLevel - 2 * troughsNumberOfNodes to volumeNodeLevel - troughsNumberOfNodes - 1
+                    if tempTroughTotalVolume.get(volumeNodeLevel - troughsNumberOfNodes) >= tempTroughTotalVolume.get(currentVolumeNode)
+                        troughUpperNth := false
+                        break
+                    else
+                        troughUpperNth := true
+
+                for currentVolumeNode = volumeNodeLevel - troughsNumberOfNodes + 1 to volumeNodeLevel
+                    if tempTroughTotalVolume.get(volumeNodeLevel - troughsNumberOfNodes) >= tempTroughTotalVolume.get(currentVolumeNode)
+                        troughLowerNth := false
+                        break
+                    else
+                        troughLowerNth := true
+
+                if troughUpperNth and troughLowerNth and tempTroughTotalVolume.get(volumeNodeLevel - troughsNumberOfNodes) / tempTroughTotalVolume.max() > vn_VolumeNodeThreshold
+
+                    startVolumeNodeIndex := vp_profileShow ? profilePlacementRight ?
+                                                             VP.startIndex :
+                                                             volumeDataArray.endProfileIndex.get(volumeNodeLevel - 2 * troughsNumberOfNodes) :
+                                             VP.startIndex
+
+                    endVolumeNodeIndex   := vp_profileShow ? profilePlacementRight ?
+                                                             volumeDataArray.endProfileIndex.get(volumeNodeLevel - 2 * troughsNumberOfNodes) :
+                                                             last_bar_index :
+                                             last_bar_index
+
+                    vn_troughVolumeColor := vn_troughsShow == 'Troughs' ? vn_troughVolumeColor : color.from_gradient(tempTroughTotalVolume.get(volumeNodeLevel - troughsNumberOfNodes) / tempTroughTotalVolume.max(), 0, 1, color.new(vn_troughVolumeColor, 95), color.new(vn_troughVolumeColor, 31))
+
+                    VP.boxes.push(box.new(startVolumeNodeIndex, lowestPrice + (volumeNodeLevel - 2 * troughsNumberOfNodes + .1) * priceStep, endVolumeNodeIndex, lowestPrice + (volumeNodeLevel - 2 * troughsNumberOfNodes + .9) * priceStep,
+                                          color(na), bgcolor = vn_troughVolumeColor))
+
+
+                    if vn_troughsShow == 'Clusters'
+
+                        for currentVolumeNode = volumeNodeLevel - 2 * troughsNumberOfNodes to volumeNodeLevel
+
+                            if currentVolumeNode >= troughsNumberOfNodes and currentVolumeNode <= vp_profileNumberOfRows - 1 + troughsNumberOfNodes
+
+                                if not volumeDataArray.troughVolume.get(currentVolumeNode - troughsNumberOfNodes)
+                                    startVolumeNodeIndex := vp_profileShow ? profilePlacementRight ?
+                                                                         VP.startIndex :
+                                                                         volumeDataArray.endProfileIndex.get(currentVolumeNode - troughsNumberOfNodes) :
+                                                         VP.startIndex
+
+                                    endVolumeNodeIndex   := vp_profileShow ? profilePlacementRight ?
+                                                                         volumeDataArray.endProfileIndex.get(currentVolumeNode - troughsNumberOfNodes) :
+                                                                         last_bar_index :
+                                                         last_bar_index
+
+                                    VP.boxes.push(box.new(startVolumeNodeIndex, lowestPrice + (currentVolumeNode - troughsNumberOfNodes + .0) * priceStep, endVolumeNodeIndex, lowestPrice + (currentVolumeNode - troughsNumberOfNodes + 1.) * priceStep,
+                                                      color(na), bgcolor = vn_troughVolumeColor))
+                                    volumeDataArray.troughVolume.set(currentVolumeNode - troughsNumberOfNodes, true)
+
+        tempTroughTotalVolume.clear()
+
+    if vn_highestNVolumeNodes > 0
+        for highestNode = 0 to vn_highestNVolumeNodes - 1
+            startVolumeNodeIndex = vp_profileShow ? profilePlacementRight ?
+                                                     VP.startIndex :
+                                                     volumeDataArray.endProfileIndex.get(volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max(highestNode))) :
+                                     VP.startIndex
+            endVolumeNodeIndex   = vp_profileShow ? profilePlacementRight ?
+                                                     volumeDataArray.endProfileIndex.get(volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max(highestNode))) :
+                                                     last_bar_index :
+                                     last_bar_index
+
+            VP.boxes.push(box.new(startVolumeNodeIndex, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max(highestNode)) + .1) * priceStep, endVolumeNodeIndex, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.max(highestNode)) + .9) * priceStep, color(na), bgcolor = vn_highestVolumeColor))
+
+    if vn_lowestNVolumeNodes > 0
+
+        lowestNVolumeNodeCount = 0
+        lowestNVolumeNodeIndex = 0//volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.min())
+        lowestNVolumeNodeValue = 0.
+
+        while lowestNVolumeNodeCount < vn_lowestNVolumeNodes
+
+            if lowestNVolumeNodeIndex == vp_profileNumberOfRows
+                break
+
+            if volumeDataArray.totalVolume.min(lowestNVolumeNodeIndex) != lowestNVolumeNodeValue
+                lowestNVolumeNodeValue := volumeDataArray.totalVolume.min(lowestNVolumeNodeIndex)
+
+                startVolumeNodeIndex = vp_profileShow ? profilePlacementRight ?
+                                                     VP.startIndex :
+                                                     volumeDataArray.endProfileIndex.get(volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.min(lowestNVolumeNodeIndex))) :
+                                     VP.startIndex
+
+                endVolumeNodeIndex   = vp_profileShow ? profilePlacementRight ?
+                                                     volumeDataArray.endProfileIndex.get(volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.min(lowestNVolumeNodeIndex))) :
+                                                     last_bar_index :
+                                     last_bar_index
+
+                VP.boxes.push(box.new(startVolumeNodeIndex, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.min(lowestNVolumeNodeIndex)) + .1) * priceStep, endVolumeNodeIndex, lowestPrice + (volumeDataArray.totalVolume.indexof(volumeDataArray.totalVolume.min(lowestNVolumeNodeIndex)) + .9) * priceStep, color(na), bgcolor = vn_lowestVolumeColor))
+                lowestNVolumeNodeCount += 1
+            lowestNVolumeNodeIndex += 1
+
+    log.info("yaz_kizim {0} {1}", VP.boxes.size(), volumeDataArray.totalVolume.size())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ＩＮＰＵＴＳ ――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――{
+colorLow = input.color(color.lime, "Цвет положительной метки ликвидности", inline = "c")
+colorHig = input.color(color.red, "Цвет отрицательной метки ликвидности", inline = "c")
+
+type levels
+    label lbl
+    bool  isUpper
+    array<box> boxes
+
+var Levels = array.new<levels>()
+boxe = array.new<box>()
+
+rsi = ta.rsi(close, 14)
+
+var start = 0
+
+// }
+
+
+
+// ＣＡＬＣＵＬＡＴＩＯＮＳ――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――{
+upperWick = (high - math.max(open, close))/math.max(open, close)
+lowerWick = (math.min(open, close) -  low)/low
+
+sizeUpWick = int(upperWick / ta.percentile_nearest_rank(upperWick, 200, 100)*100)
+sizeLoWick = int(lowerWick / ta.percentile_nearest_rank(lowerWick, 200, 100)*100)
+
+method deleteObj(levels l)=>
+    l.lbl.delete()
+    
+    boxLast = l.boxes.last()
+    boxFirst = l.boxes.first()
+
+    box_ = l.isUpper ? boxLast : boxFirst
+    box.new(box_.get_left(), box_.get_top(), box_.get_right()-20, box_.get_bottom(), na, 0, bgcolor = color.new(chart.fg_color, 80))
+
+    for b in l.boxes
+        b.delete()
+    Levels.remove(Levels.indexof(l))
+
+// ＰＬＯＴ ――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――{
+if barstate.isconfirmed 
+    if sizeUpWick >= 80 and not (sizeLoWick >= 80) and rsi > 50 and bar_index - start > 20
+        start := bar_index
+        box.new(bar_index-1, high, bar_index +1, math.max(open, close), colorHig, bgcolor = na, border_width = 2)
+        step = (high - math.max(open, close))/10
+        lbl  = label.new(bar_index, high-step*5, str.tostring(volume, format.volume), style = label.style_label_right, color = color(na), textcolor = chart.fg_color)
+        
+        for i = 0 to 9
+            bot = math.max(open, close) + step * i 
+            top = bot + step
+            b   = box.new(bar_index, top, bar_index, bot, na, 0, bgcolor = i == 9 ? colorHig : color.from_gradient(20-i, 0, 20, colorHig, na))
+            boxe.push(b)
+
+        Levels.push(levels.new(lbl, true, boxe))
+
+
+    if sizeLoWick >= 80 and not (sizeUpWick >= 80) and rsi < 50 and bar_index - start > 20
+        start := bar_index
+        box.new(bar_index-1, low, bar_index +1, math.min(open, close), colorLow, bgcolor = na, border_width = 2)
+        step = (math.min(open, close) - low)/10
+        lbl  = label.new(bar_index, low+step*5, str.tostring(volume, format.volume), style = label.style_label_right, color = color(na), textcolor = chart.fg_color)
+
+        for i = 0 to 9
+            bot = low + step * i 
+            top = bot + step
+            b   = box.new(bar_index, top, bar_index, bot, na, 0, bgcolor =  i == 0 ? colorLow : color.from_gradient(i, -10, 10, colorLow, na))
+            boxe.push(b)
+
+        Levels.push(levels.new(lbl, false, boxe))
+
+    if Levels.size() > 10
+
+        l = Levels.shift()
+
+        l.lbl.delete()
+        for b in l.boxes
+            b.delete()
+
+    if Levels.size() > 0 
+        for i = 0 to Levels.size() - 1
+            l = Levels.get(i)
+      
+            l.lbl.set_x(bar_index+20)
+
+            for b in l.boxes
+                b.set_right(bar_index+20)
+
+            if l.isUpper
+                if low >= l.boxes.last().get_top()
+                    l.deleteObj()
+            else
+                if high <= l.boxes.first().get_bottom()
+                    l.deleteObj()
+         
+bgcolor(sizeUpWick >= 80 ? color.new(color.red, 90) : sizeLoWick >= 80 ? color.new(color.lime, 90) : color(na), title = "BackGround Wicks color", display = display.none)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ----- USER INPUTS -----
+string group_main = "Основные настройки зон"
+pivotLookbackLeft = input.int(5, title="Сдвиг пивота влево", tooltip="Количество баров для проверки слева от пивота.", group=group_main)
+pivotLookbackRight = input.int(3, title="Сдвиг пивота вправо", tooltip="Количество баров для проверки справа от пивота.", group=group_main)
+maxZones = input.int(10, title="Максимум активных зон", tooltip="Максимальное количество отображаемых зон спроса и предложения.", group=group_main)
+string breakoutBehavior = input.string("Показать как пробитую (Flip)", title="Поведение при пробое", options=["Удалить зону", "Показать как пробитую (Flip)"], tooltip="Выберите, что делать при пробое зоны ценой.\n'Удалить зону': Зона полностью удаляется.\n'Показать как пробитую (Flip)': Зона перестает расширяться, становится серой и остается на графике как потенциальная область S/R.", group=group_main)
+
+string group_sensitivity = "Настройки чувствительности"
+string zoneFindingLogic = input.string("Умеренно", title="Логика поиска зоны", options=["Избирательно", "Умеренно"], tooltip="Логика подтверждения зоны.\n'Избирательно': Требует И сильного ценового дисбаланса, И высокого объема.\n'Умеренно': Требует ИЛИ сильного дисбаланса, ИЛИ высокого объема.", group=group_sensitivity)
+atrLength = input.int(14, title="Длина ATR", tooltip="Период ATR для измерения волатильности.", group=group_sensitivity)
+imbalanceAtrMultiplier = input.float(0.1, title="Множитель ATR для дисбаланса", minval=0.1, group=group_sensitivity)
+volumeLookback = input.int(20, title="Период для объема", group=group_sensitivity)
+volumeMultiplier = input.float(0.2, title="Множитель объема", minval=0.1, group=group_sensitivity)
+
+string group_visuals = "Настройки отображения"
+color demandColor = input.color(color.new(#089981, 90), title="Цвет зоны спроса", group=group_visuals)
+color supplyColor = input.color(color.new(#f23645, 90), title="Цвет зоны предложения", group=group_visuals)
+color brokenColor = input.color(color.new(color.gray, 90), title="Цвет пробитой зоны", group=group_visuals)
+int testedColorAlpha = 50
+
+// ----- DATA STRUCTURES -----
+type Zone
+    box   zoneBox
+    float highPrice
+    float lowPrice
+    int   startBar
+    bool  isDemand
+    int   testedCount
+    bool  isBroken
+
+// Arrays to store active zones
+var Zone[] demandZones = array.new<Zone>()
+var Zone[] supplyZones = array.new<Zone>()
+
+// ----- CORE CALCULATIONS -----
+float atr = ta.atr(atrLength)
+float avgVolume = ta.sma(volume, volumeLookback)
+
+// ----- PIVOT IDENTIFICATION FUNCTIONS -----
+isPivotLow(lookback) =>
+    bool isLowest = true
+    for i = 1 to lookback
+        if low[i] < low[lookback]
+            isLowest := false
+            break
+    isLowest
+
+isPivotHigh(lookback) =>
+    bool isHighest = true
+    for i = 1 to lookback
+        if high[i] > high[lookback]
+            isHighest := false
+            break
+    isHighest
+
+
+// ----- MAIN SCRIPT LOGIC -----
+if barstate.isconfirmed
+    // --- MANAGE EXISTING DEMAND ZONES ---
+    if array.size(demandZones) > 0
+        for i = array.size(demandZones) - 1 to 0
+            Zone dZone = array.get(demandZones, i)
+
+            if not dZone.isBroken
+                box.set_right(dZone.zoneBox, bar_index + 1)
+                
+                bool isBrokenNow = close < dZone.lowPrice
+                bool isTestedNow = high >= dZone.lowPrice and low <= dZone.highPrice and bar_index > dZone.startBar + 1
+
+                if isBrokenNow
+                    if breakoutBehavior == "Delete Zone"
+                        box.delete(dZone.zoneBox)
+                        array.remove(demandZones, i)
+                    else // "Show as Broken (Flip)"
+                        box.set_bgcolor(dZone.zoneBox, brokenColor)
+                        box.set_border_color(dZone.zoneBox, brokenColor)
+                        box.set_border_style(dZone.zoneBox, line.style_solid)
+                        Zone updatedZone = Zone.new(dZone.zoneBox, dZone.highPrice, dZone.lowPrice, dZone.startBar, dZone.isDemand, dZone.testedCount, true)
+                        array.set(demandZones, i, updatedZone)
+                else if isTestedNow
+                    int newTestCount = dZone.testedCount + 1
+                    if newTestCount > 1
+                        box.delete(dZone.zoneBox)
+                        array.remove(demandZones, i)
+                    else
+                        color testedBgColor = color.new(demandColor, testedColorAlpha)
+                        box.set_bgcolor(dZone.zoneBox, testedBgColor)
+                        box.set_border_style(dZone.zoneBox, line.style_dotted)
+                        Zone updatedZone = Zone.new(dZone.zoneBox, dZone.highPrice, dZone.lowPrice, dZone.startBar, dZone.isDemand, newTestCount, dZone.isBroken)
+                        array.set(demandZones, i, updatedZone)
+
+    // --- MANAGE EXISTING SUPPLY ZONES ---
+    if array.size(supplyZones) > 0
+        for i = array.size(supplyZones) - 1 to 0
+            Zone sZone = array.get(supplyZones, i)
+
+            if not sZone.isBroken
+                box.set_right(sZone.zoneBox, bar_index + 1)
+
+                bool isBrokenNow = close > sZone.highPrice
+                bool isTestedNow = high >= sZone.lowPrice and low <= sZone.highPrice and bar_index > sZone.startBar + 1
+                
+                if isBrokenNow
+                    if breakoutBehavior == "Delete Zone"
+                        box.delete(sZone.zoneBox)
+                        array.remove(supplyZones, i)
+                    else // "Show as Broken (Flip)"
+                        box.set_bgcolor(sZone.zoneBox, brokenColor)
+                        box.set_border_color(sZone.zoneBox, brokenColor)
+                        box.set_border_style(sZone.zoneBox, line.style_solid)
+                        Zone updatedZone = Zone.new(sZone.zoneBox, sZone.highPrice, sZone.lowPrice, sZone.startBar, sZone.isDemand, sZone.testedCount, true)
+                        array.set(supplyZones, i, updatedZone)
+                else if isTestedNow
+                    int newTestCount = sZone.testedCount + 1
+                    if newTestCount > 1
+                        box.delete(sZone.zoneBox)
+                        array.remove(supplyZones, i)
+                    else
+                        color testedBgColor = color.new(supplyColor, testedColorAlpha)
+                        box.set_bgcolor(sZone.zoneBox, testedBgColor)
+                        box.set_border_style(sZone.zoneBox, line.style_dotted)
+                        Zone updatedZone = Zone.new(sZone.zoneBox, sZone.highPrice, sZone.lowPrice, sZone.startBar, sZone.isDemand, newTestCount, sZone.isBroken)
+                        array.set(supplyZones, i, updatedZone)
+
+    // --- FIND NEW ZONES ---
+    bool isHighPivot = isPivotHigh(pivotLookbackLeft) and high[pivotLookbackRight] > high[pivotLookbackRight + 1] and high[pivotLookbackRight] > high[pivotLookbackRight - 1]
+    bool isLowPivot = isPivotLow(pivotLookbackLeft) and low[pivotLookbackRight] < low[pivotLookbackRight + 1] and low[pivotLookbackRight] < low[pivotLookbackRight - 1]
+
+    if isHighPivot
+        int baseBar = pivotLookbackRight
+        for i = pivotLookbackRight + 1 to pivotLookbackRight + 5
+            if close[i] > open[i]
+                baseBar := i
+                break
+
+        float zoneHigh = high[pivotLookbackRight]
+        float zoneLow = low[baseBar]
+
+        int departureBar = pivotLookbackRight - 1
+        float departureBody = math.abs(close[departureBar] - open[departureBar])
+        bool isImbalanceStrong = departureBody > atr * imbalanceAtrMultiplier
+        bool isVolumeStrong = volume[departureBar] > avgVolume * volumeMultiplier
+
+        bool isZoneValid = zoneFindingLogic == "Selective" ? (isImbalanceStrong and isVolumeStrong) : (isImbalanceStrong or isVolumeStrong)
+
+        if isZoneValid
+            box newSupplyBox = box.new(bar_index - baseBar, zoneHigh, bar_index + 1, zoneLow, border_color=supplyColor, bgcolor=supplyColor)
+            array.push(supplyZones, Zone.new(newSupplyBox, zoneHigh, zoneLow, bar_index - baseBar, false, 0, false))
+
+            if array.size(supplyZones) > maxZones
+                box.delete(array.get(supplyZones, 0).zoneBox)
+                array.shift(supplyZones)
+
+    if isLowPivot
+        int baseBar = pivotLookbackRight
+        for i = pivotLookbackRight + 1 to pivotLookbackRight + 5
+            if close[i] < open[i]
+                baseBar := i
+                break
+
+        float zoneLow = low[pivotLookbackRight]
+        float zoneHigh = high[baseBar]
+
+        int departureBar = pivotLookbackRight - 1
+        float departureBody = math.abs(close[departureBar] - open[departureBar])
+        bool isImbalanceStrong = departureBody > atr * imbalanceAtrMultiplier
+        bool isVolumeStrong = volume[departureBar] > avgVolume * volumeMultiplier
+
+        bool isZoneValid = zoneFindingLogic == "Selective" ? (isImbalanceStrong and isVolumeStrong) : (isImbalanceStrong or isVolumeStrong)
+
+        if isZoneValid
+            box newDemandBox = box.new(bar_index - baseBar, zoneHigh, bar_index + 1, zoneLow, border_color=demandColor, bgcolor=demandColor)
+            array.push(demandZones, Zone.new(newDemandBox, zoneHigh, zoneLow, bar_index - baseBar, true, 0, false))
+
+            if array.size(demandZones) > maxZones
+                box.delete(array.get(demandZones, 0).zoneBox)
+                array.shift(demandZones)
